@@ -1,0 +1,2 @@
+<script setup lang="ts">import { Link } from '@inertiajs/vue3'; import type { PaginationLink } from '@/types'; defineProps<{ links?: PaginationLink[] }>();</script>
+<template><nav v-if="links && links.length > 3" class="pagination" aria-label="Paginación"><template v-for="item in links" :key="item.label"><Link v-if="item.url" :href="item.url" :class="{ active: item.active }" v-html="item.label" preserve-scroll /><span v-else v-html="item.label" /></template></nav></template>

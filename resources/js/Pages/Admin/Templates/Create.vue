@@ -1,0 +1,1 @@
+<script setup lang="ts">import AdminLayout from '@/Layouts/AdminLayout.vue';import PageMeta from '@/Components/PageMeta.vue';import Form from './Form.vue';</script><template><AdminLayout title="Nueva plantilla PDF" eyebrow="Configuración documental"><PageMeta title="Nueva plantilla PDF" noindex/><section class="admin-content"><Form/></section></AdminLayout></template>

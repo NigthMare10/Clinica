@@ -1,0 +1,2 @@
+<script setup lang="ts">import AdminLayout from '@/Layouts/AdminLayout.vue';import PageMeta from '@/Components/PageMeta.vue';import Form from './Form.vue';import type {Specialty} from '@/types';defineProps<{specialty:Specialty}>();</script>
+<template><AdminLayout :title="`Editar ${specialty.name}`" eyebrow="Catálogos / Especialidades"><PageMeta title="Editar especialidad" noindex/><section class="admin-content narrow-content"><Form :specialty="specialty"/></section></AdminLayout></template>

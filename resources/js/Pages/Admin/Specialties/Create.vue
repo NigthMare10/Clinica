@@ -1,0 +1,2 @@
+<script setup lang="ts">import AdminLayout from '@/Layouts/AdminLayout.vue';import PageMeta from '@/Components/PageMeta.vue';import Form from './Form.vue';</script>
+<template><AdminLayout title="Nueva especialidad" eyebrow="Catálogos / Especialidades"><PageMeta title="Nueva especialidad" noindex/><section class="admin-content narrow-content"><Form/></section></AdminLayout></template>

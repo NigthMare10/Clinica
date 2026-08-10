@@ -1,0 +1,1 @@
+<template><svg viewBox="0 0 64 64" role="img" aria-label="Clínica Médica Santa Ana"><rect width="64" height="64" rx="14" fill="#092a43"/><path d="M27 13h10v14h14v10H37v14H27V37H13V27h14z" fill="#16c9e8"/><circle cx="32" cy="32" r="6" fill="#fff"/></svg></template>
