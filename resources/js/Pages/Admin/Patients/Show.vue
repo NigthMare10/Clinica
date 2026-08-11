@@ -5,11 +5,12 @@ import PageMeta from '@/Components/PageMeta.vue';
 import Pagination from '@/Components/Pagination.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import EmptyState from '@/Components/EmptyState.vue';
+import { hondurasDate } from '@/Composables/hondurasDate';
 import type { MedicalDocument, Paginated, Patient } from '@/types';
 
 const props = defineProps<{ patient: Patient; documents: Paginated<MedicalDocument> }>();
 const initials = `${props.patient.first_name.charAt(0)}${props.patient.last_name.charAt(0)}`.toUpperCase();
-const date = (value?: string | null) => value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value)) : 'No registrada';
+const date = (value?: string | null) => value ? hondurasDate(value) : 'No registrada';
 </script>
 
 <template>

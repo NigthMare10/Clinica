@@ -6,6 +6,7 @@ import PageMeta from '@/Components/PageMeta.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
+import { hondurasDate } from '@/Composables/hondurasDate';
 import type { MedicalDocument, Paginated } from '@/types';
 
 const props = defineProps<{ documents: Paginated<MedicalDocument>; filters: { search?: string; status?: string } }>();
@@ -14,7 +15,7 @@ let timer: number;
 const apply = () => router.get(route('admin.documents.index'), { search: filters.search || undefined, status: filters.status || undefined }, { preserveState: true, replace: true });
 watch(() => filters.search, () => { window.clearTimeout(timer); timer = window.setTimeout(apply, 350); });
 const name = (person?: { first_name: string; last_name: string } | null) => person ? `${person.first_name} ${person.last_name}` : 'Sin asignar';
-const date = (value: string) => new Intl.DateTimeFormat('es', { dateStyle: 'medium' }).format(new Date(value));
+const date = (value: string) => hondurasDate(value);
 const reviewable = (document: MedicalDocument) => ['REVIEW_REQUIRED', 'READY'].includes(document.status);
 let poll: number | undefined;
 onMounted(() => { if (props.documents.data.some((document) => document.status === 'PROCESSING')) poll = window.setInterval(() => router.reload({ only: ['documents'] }), 2500); });

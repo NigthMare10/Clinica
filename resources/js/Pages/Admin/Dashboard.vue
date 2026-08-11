@@ -3,10 +3,11 @@ import { Link } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import PageMeta from '@/Components/PageMeta.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
+import { hondurasDateTime } from '@/Composables/hondurasDate';
 import type { MedicalDocument } from '@/types';
 
 defineProps<{ counts: { documents: number; documents_today: number; pending_review: number; generated: number; certificates: number; incapacities: number; verifications: number; doctors: number; patients: number; specialties: number; active_clinics: number }; recent: MedicalDocument[] }>();
-const date = (value: string) => new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+const date = (value: string) => hondurasDateTime(value);
 </script>
 
 <template>

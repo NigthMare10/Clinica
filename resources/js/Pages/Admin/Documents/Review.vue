@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import PageMeta from '@/Components/PageMeta.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
+import { hondurasDateTime } from '@/Composables/hondurasDate';
 import type { Doctor, ExtractionCandidate, MedicalDocument, Patient } from '@/types';
 
 type RevisionChange = { field: string; before: unknown; after: unknown };
@@ -19,7 +20,7 @@ if (Array.isArray(raw)) for (const candidate of raw as ExtractionCandidate[]) { 
 else for (const [field,candidate] of Object.entries(raw)) { if (field in grouped) grouped[field].push(...(Array.isArray(candidate) ? candidate : [candidate])); }
 const value = (candidate:unknown) => { if (candidate == null) return ''; if (typeof candidate === 'object') { const item=candidate as Record<string,unknown>; return String(item.value ?? item.text ?? item.content ?? ''); } return String(candidate); };
 const displayValue = (item:unknown) => item == null || item === '' ? 'Sin valor' : typeof item === 'object' ? JSON.stringify(item) : String(item);
-const formatDate = (date:string|null) => date ? new Intl.DateTimeFormat('es-HN',{dateStyle:'medium',timeStyle:'short'}).format(new Date(date)) : 'Sin fecha';
+const formatDate = (date:string|null) => hondurasDateTime(date);
 const fields = allowlist.filter(field => grouped[field].length || Object.prototype.hasOwnProperty.call(props.document.confirmed_fields ?? {},field));
 const seed = Object.fromEntries(fields.map(field => [field,props.document.confirmed_fields?.[field] ?? value(grouped[field][0])]));
 const form = useForm({fields:seed as Record<string,string|null>,doctor_id:props.document.doctor?.id ?? '',patient_id:props.document.patient?.id ?? '',approve:false});

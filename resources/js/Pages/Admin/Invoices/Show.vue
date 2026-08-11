@@ -5,6 +5,7 @@ import { computed, ref } from "vue";
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 import PageMeta from "@/Components/PageMeta.vue";
 import StatusBadge from "@/Components/StatusBadge.vue";
+import { hondurasDateTime } from "@/Composables/hondurasDate";
 const props = defineProps<{
     invoice: any;
     authorizations: any[];
@@ -28,6 +29,7 @@ const money = (value: string) =>
         style: "currency",
         currency: "HNL",
     }).format(Number(value));
+const dateTime = (value?: string | null) => hondurasDateTime(value);
 const issue = async () => {
     error.value = "";
     busy.value = true;
@@ -84,7 +86,7 @@ const voidInvoice = async () => {
                     <p>
                         {{ invoice.clinic?.name }} · Creada
                         {{
-                            new Date(invoice.created_at).toLocaleString("es-HN")
+                            dateTime(invoice.created_at)
                         }}
                     </p>
                 </div>
@@ -162,11 +164,7 @@ const voidInvoice = async () => {
                             <dt>Emitida</dt>
                             <dd>
                                 {{
-                                    invoice.issued_at
-                                        ? new Date(
-                                              invoice.issued_at,
-                                          ).toLocaleString("es-HN")
-                                        : "Pendiente"
+                                    invoice.issued_at ? dateTime(invoice.issued_at) : "Pendiente"
                                 }}
                             </dd>
                         </div>
@@ -174,9 +172,7 @@ const voidInvoice = async () => {
                             <dt>Anulada</dt>
                             <dd>
                                 {{
-                                    new Date(invoice.voided_at).toLocaleString(
-                                        "es-HN",
-                                    )
+                                    dateTime(invoice.voided_at)
                                 }}
                             </dd>
                         </div>
@@ -262,8 +258,7 @@ const voidInvoice = async () => {
                 <ol class="invoice-audit">
                     <li v-for="audit in invoice.audits" :key="audit.id">
                         <strong>{{ audit.action }}</strong> ·
-                        {{ new Date(audit.created_at).toLocaleString("es-HN")
-                        }}<span v-if="audit.user">
+                        {{ dateTime(audit.created_at) }}<span v-if="audit.user">
                             por {{ audit.user.name }}</span
                         >
                     </li>
