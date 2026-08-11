@@ -38,7 +38,12 @@ class GenerateMedicalDocumentService
         abort_if($template?->document_type && $template->document_type !== MedicalDocumentType::MEDICAL_CERTIFICATE->value, 422, 'The template does not support medical certificates.');
 
         $id = (string) Str::uuid();
-        $temporary = tempnam(sys_get_temp_dir(), 'csa-generated-');
+        // The system TEMP directory may be unavailable to the web-server user on Windows.
+        $temporaryDirectory = storage_path('app/private/tmp');
+        if (! is_dir($temporaryDirectory) && ! mkdir($temporaryDirectory, 0700, true) && ! is_dir($temporaryDirectory)) {
+            abort(500, 'Unable to prepare document generation.');
+        }
+        $temporary = tempnam($temporaryDirectory, 'csa-generated-');
         abort_if($temporary === false, 500, 'Unable to prepare document generation.');
         $path = 'medical/original/'.$id.'-generated.pdf';
         $stored = false;

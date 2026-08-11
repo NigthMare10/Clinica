@@ -4,7 +4,7 @@ import path from 'node:path';
 import { signIn } from './fixtures';
 
 const artifacts = path.resolve('artifacts/playwright');
-const incapacity = `Por medio de la presente se hace constar que la paciente Hashlin Lizeth Espino Gómez, de 21 años de edad, con número de identidad 0801200519904, acudió a consulta médica el día 9 de agosto de 2026 a las 10:00 a. m., por presentar diarrea frecuente, fiebre y dolor abdominal.
+const incapacity = `Por medio de la presente se hace constar que la paciente Paciente Prueba Automatizada, de 21 años de edad, con número de identidad 0801200599999, acudió a consulta médica el día 9 de agosto de 2026 a las 10:00 a. m., por presentar diarrea frecuente, fiebre y dolor abdominal.
 
 Durante la valoración médica se evidenciaron manifestaciones compatibles con un proceso gastrointestinal agudo que limita temporalmente sus actividades habituales.
 
@@ -33,6 +33,7 @@ test('analyzes text, generates a draft and issues an encrypted one-page incapaci
     await page.getByLabel(/Pegue aquí el contenido/).fill(incapacity);
     await page.getByRole('button', { name: 'ANALIZAR TEXTO' }).click();
     await expect(page.getByText(/% detectado/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Generar borrador' })).toBeEnabled();
     await page.screenshot({ path: path.join(artifacts, 'text-analysis.png'), fullPage: true });
     await page.getByRole('button', { name: 'Generar borrador' }).click();
     await expect(page).toHaveURL(/\/admin\/documents\/.+\/review/);

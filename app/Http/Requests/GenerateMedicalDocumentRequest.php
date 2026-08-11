@@ -35,6 +35,7 @@ class GenerateMedicalDocumentRequest extends FormRequest
             'recommendations' => ['nullable', 'string', 'max:1500'],
             'free_text' => ['nullable', 'string', 'max:12000'],
             'intent' => ['nullable', Rule::in(['draft', 'issue'])],
+            'quick_invoice' => ['nullable', 'boolean', Rule::prohibitedIf($this->input('intent') !== 'issue')],
             'leave_start_date' => [Rule::requiredIf($incapacity), 'nullable', 'date'],
             'leave_end_date' => [Rule::requiredIf($incapacity), 'nullable', 'date', 'after_or_equal:leave_start_date'],
             'leave_days' => [Rule::requiredIf($incapacity), 'nullable', 'integer', 'min:1', 'max:365'],

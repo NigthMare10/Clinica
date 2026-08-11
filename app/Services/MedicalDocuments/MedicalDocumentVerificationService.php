@@ -20,7 +20,7 @@ class MedicalDocumentVerificationService
 
     public function byCode(string $code, ?string $identityLast4 = null, string $method = 'MANUAL_CODE'): array
     {
-        $document = MedicalDocument::query()->where('public_code', strtoupper(trim($code)))->first();
+        $document = MedicalDocument::query()->where('public_code', strtoupper(trim($code)))->where('is_current_revision', true)->first();
 
         return $this->result($document, in_array($method, ['MANUAL_CODE', 'PDF_HASH'], true) ? $method : 'MANUAL_CODE', $identityLast4);
     }

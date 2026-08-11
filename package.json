@@ -31,7 +31,6 @@
     },
     "dependencies": {
         "@lucide/vue": "^1.31.0",
-        "gsap": "^3.15.0",
         "leaflet": "^1.9.4"
     }
 }

@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\IssueInvoiceRequest;
+use App\Http\Requests\StoreInvoiceRequest;
+use App\Http\Requests\VoidInvoiceRequest;
+use App\Models\BillingService;
+use App\Models\Clinic;
+use App\Models\FiscalAuthorization;
+use App\Models\Invoice;
+use App\Models\InvoiceAudit;
+use App\Models\MedicalDocument;
+use App\Models\Patient;
+use App\Services\Fiscal\InvoiceDraftService;
+use App\Services\Fiscal\InvoiceIssueService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class InvoiceController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $this->authorize('viewAny', Invoice::class);
+
+        $clinicIds = $request->user()->hasAnyRole('SUPER_ADMIN') ? Clinic::pluck('id') : $request->user()->accessibleClinicIds();
+        $invoices = Invoice::query()->accessibleTo($request->user())->with(['patient:id,first_name,last_name', 'medicalDocument:id,public_code', 'clinic:id,name'])
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
+            ->when($request->filled('clinic_id'), fn ($query) => $query->where('clinic_id', $request->string('clinic_id')))
+            ->when($request->filled('q'), fn ($query) => $query->where(fn ($search) => $search->where('ncf', 'like', '%'.$request->string('q').'%')->orWhere('recipient_name', 'like', '%'.$request->string('q').'%')->orWhereHas('patient', fn ($patient) => $patient->where('first_name', 'like', '%'.$request->string('q').'%')->orWhere('last_name', 'like', '%'.$request->string('q').'%'))))
+            ->latest()->paginate(25)->withQueryString();
+
+        return Inertia::render('Admin/Invoices/Index', [
+            'invoices' => $invoices,
+            'clinics' => Clinic::query()->whereIn('id', $clinicIds)->orderBy('name')->get(['id', 'name']),
+            'filters' => $request->only(['status', 'clinic_id', 'q']),
+            'canCreate' => $request->user()->hasAnyRole('SUPER_ADMIN', 'ADMINISTRATOR', 'DOCUMENT_OPERATOR'),
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        $this->authorize('create', Invoice::class);
+        $clinicIds = $request->user()->hasAnyRole('SUPER_ADMIN') ? Clinic::pluck('id') : $request->user()->accessibleClinicIds();
+
+        return Inertia::render('Admin/Invoices/Create', [
+            'clinics' => Clinic::query()->whereIn('id', $clinicIds)->orderBy('name')->get(['id', 'name']),
+            'patients' => Patient::query()->accessibleTo($request->user())->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'document_number'])->makeVisible('document_number'),
+            'documents' => MedicalDocument::query()->accessibleTo($request->user())->where('is_current_revision', true)->whereNotNull('public_code')->with('patient:id,first_name,last_name,document_number')->latest()->get(['id', 'clinic_id', 'patient_id', 'public_code', 'consultation_date', 'consultation_time']),
+            'sourceDocumentId' => $request->string('medical_document_id')->toString(),
+            'services' => BillingService::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'default_price', 'tax_type']),
+        ]);
+    }
+
+    public function store(StoreInvoiceRequest $request, InvoiceDraftService $drafts): JsonResponse
+    {
+        $this->authorize('create', Invoice::class);
+        $data = $request->validated();
+        abort_unless($request->user()->hasClinicAccess($data['clinic_id']), 403);
+        if (! empty($data['patient_id'])) {
+            abort_unless(Patient::query()->accessibleTo($request->user())->whereKey($data['patient_id'])->exists(), 422, 'El paciente no está disponible para esta clínica.');
+        }
+        if (! empty($data['medical_document_id'])) {
+            abort_unless(MedicalDocument::query()->accessibleTo($request->user())->whereKey($data['medical_document_id'])->where('clinic_id', $data['clinic_id'])->exists(), 422, 'El documento médico no pertenece a la clínica seleccionada.');
+        }
+        $invoice = $drafts->create($data, $request->user(), ['ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]);
+
+        return response()->json($invoice->load('items'), 201);
+    }
+
+    public function show(Request $request, Invoice $invoice): Response
+    {
+        $this->authorize('view', $invoice);
+
+        return Inertia::render('Admin/Invoices/Show', [
+            'invoice' => $invoice->load(['items', 'authorization', 'audits.user:id,name', 'patient:id,first_name,last_name', 'clinic:id,name', 'medicalDocument:id,public_code,status'])->makeVisible('recipient_tax_id'),
+            'authorizations' => FiscalAuthorization::query()->where('clinic_id', $invoice->clinic_id)->latest()->get(['id', 'ncf_prefix', 'next_number', 'range_end', 'valid_from', 'valid_until', 'status', 'is_active']),
+            'canIssue' => $request->user()->can('issue', $invoice),
+            'canVoid' => $request->user()->can('void', $invoice),
+        ]);
+    }
+
+    public function issue(IssueInvoiceRequest $request, Invoice $invoice, InvoiceIssueService $service): JsonResponse
+    {
+        $this->authorize('issue', $invoice);
+        $result = $service->issue($invoice, $request->user(), $request->validated('fiscal_authorization_id'));
+
+        return response()->json(['invoice' => $result['invoice']->load('items'), 'qr_token' => $result['qr_token'], 'verification_url' => route('public.invoice.verify', $result['qr_token']), 'download_url' => route('admin.invoices.download', $invoice)]);
+    }
+
+    public function download(Request $request, Invoice $invoice)
+    {
+        $this->authorize('view', $invoice);
+        $path = $invoice->getRawOriginal('issued_path');
+        abort_unless(is_string($path) && str_starts_with($path, 'fiscal/invoices/') && ! str_contains($path, '..'), 404);
+        $disk = Storage::disk(config('invoice_pdf.disk'));
+        abort_unless($disk->exists($path), 404);
+        InvoiceAudit::create([
+            'invoice_id' => $invoice->id, 'user_id' => $request->user()->id, 'action' => 'PDF_DOWNLOADED',
+            'payload' => ['issued_hash' => $invoice->issued_hash], 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+        ]);
+
+        return $disk->download($path, 'factura-'.$invoice->ncf.'.pdf', [
+            'Content-Type' => 'application/pdf', 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, private, max-age=0', 'Pragma' => 'no-cache', 'Expires' => '0',
+        ]);
+    }
+
+    public function void(VoidInvoiceRequest $request, Invoice $invoice, InvoiceIssueService $service): JsonResponse
+    {
+        $this->authorize('void', $invoice);
+
+        return response()->json($service->void($invoice, $request->user(), $request->validated('reason')));
+    }
+}

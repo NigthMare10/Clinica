@@ -12,7 +12,7 @@ const institution = useInstitution();
     <PublicLayout>
         <PageMeta title="Contacto" :description="`${institution.availability} en ${institution.short_name}.`" />
         <section class="contact-visual-hero">
-            <div><img src="/images/photography/clinic-exterior-1280.webp" srcset="/images/photography/clinic-exterior-640.webp 640w, /images/photography/clinic-exterior-1280.webp 1280w" sizes="100vw" width="1280" height="853" alt="Fachada de un centro médico moderno" decoding="async" fetchpriority="high"></div>
+            <div><img src="/images/photography/clinic-exterior-1280.webp" srcset="/images/photography/clinic-exterior-640.webp 640w, /images/photography/clinic-exterior-1280.webp 1280w" sizes="100vw" width="1280" height="853" alt="Fachada de un centro médico moderno" loading="eager" decoding="async" fetchpriority="high"></div>
             <div class="container"><p class="eyebrow">{{ institution.availability }}</p><h1>{{ page?.title || 'Conversemos sobre su salud' }}</h1><p>{{ institution.emergencies }}</p></div>
         </section>
         <section class="section">

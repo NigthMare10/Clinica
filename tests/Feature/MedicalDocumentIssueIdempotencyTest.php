@@ -6,6 +6,7 @@ use App\Enums\MedicalDocumentStatus;
 use App\Models\MedicalDocument;
 use App\Models\User;
 use App\Services\MedicalDocuments\DocumentHashService;
+use App\Services\MedicalDocuments\InstitutionalSignatureStampService;
 use App\Services\MedicalDocuments\MedicalDocumentAuditService;
 use App\Services\MedicalDocuments\MedicalDocumentConsistencyService;
 use App\Services\MedicalDocuments\MedicalDocumentIssueService;
@@ -51,9 +52,15 @@ class MedicalDocumentIssueIdempotencyTest extends TestCase
         $audit = Mockery::mock(MedicalDocumentAuditService::class);
         $audit->shouldReceive('record')->once();
         $encryption = Mockery::mock(PdfEncryptionService::class);
+        $institutionalMarks = Mockery::mock(InstitutionalSignatureStampService::class);
+        $institutionalMarks->shouldReceive('apply')->once()->andReturnUsing(function ($document, $input, $output) {
+            copy($input, $output);
+
+            return [];
+        });
         $inspection = Mockery::mock(PdfDocumentInspectionService::class);
         $inspection->shouldReceive('assertOnePage')->twice();
-        $service = new MedicalDocumentIssueService(new DocumentHashService, $qr, $stamp, $encryption, $verify, new MedicalDocumentConsistencyService, $audit, $inspection);
+        $service = new MedicalDocumentIssueService(new DocumentHashService, $qr, $stamp, $institutionalMarks, $encryption, $verify, new MedicalDocumentConsistencyService, $audit, $inspection);
 
         $first = $service->issue($document, $user);
         $second = $service->issue($document, $user);

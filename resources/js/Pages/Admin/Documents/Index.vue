@@ -20,7 +20,7 @@ let poll: number | undefined;
 onMounted(() => { if (props.documents.data.some((document) => document.status === 'PROCESSING')) poll = window.setInterval(() => router.reload({ only: ['documents'] }), 2500); });
 onUnmounted(() => window.clearInterval(poll));
 const revoke = (document: MedicalDocument) => { const reason = window.prompt('Motivo de revocación'); if (reason?.trim()) router.post(route('admin.documents.revoke', document.id), { reason: reason.trim() }, { preserveScroll: true }); };
-const reissue = (document: MedicalDocument) => router.post(route('admin.documents.reissue', document.id), {}, { preserveScroll: true });
+const reissue = (document: MedicalDocument) => { const reason = window.prompt('Motivo de la corrección'); if (reason?.trim()) router.post(route('admin.documents.corrections.store', document.id), { reason: reason.trim() }, { preserveScroll: true }); };
 </script>
 
 <template>

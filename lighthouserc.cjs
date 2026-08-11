@@ -3,13 +3,16 @@ module.exports = {
         collect: {
             url: [
                 'http://127.0.0.1:8018/',
+                'http://127.0.0.1:8018/especialidades',
                 'http://127.0.0.1:8018/clinicas',
                 'http://127.0.0.1:8018/verificar',
                 'http://127.0.0.1:8018/login',
             ],
             numberOfRuns: 1,
+            startServerCommand: 'php -S 127.0.0.1:8018 -t public tests/e2e/server.php',
+            startServerReadyPattern: 'Development Server',
             settings: {
-                chromePath: 'C:\\Users\\PC\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe',
+                chromePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
                 chromeFlags: '--headless --no-sandbox',
             },
         },

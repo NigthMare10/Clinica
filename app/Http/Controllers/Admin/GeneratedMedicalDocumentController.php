@@ -6,13 +6,16 @@ use App\Enums\MedicalDocumentStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\GenerateMedicalDocumentRequest;
+use App\Models\BillingProfile;
 use App\Models\Clinic;
+use App\Models\Invoice;
 use App\Models\MedicalDocument;
 use App\Models\Patient;
 use App\Services\MedicalDocuments\GenerateMedicalDocumentService;
 use App\Services\MedicalDocuments\MedicalDocumentAuditService;
 use App\Services\MedicalDocuments\MedicalDocumentIssueService;
 use App\Services\MedicalDocuments\MedicalTextExtractionService;
+use App\Services\MedicalDocuments\QuickBillingCoordinator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,15 +32,26 @@ class GeneratedMedicalDocumentController extends Controller
         $clinics = Clinic::where('status', 'ACTIVE')
             ->when(! request()->user()->hasAnyRole(UserRole::SUPER_ADMIN), fn ($query) => $query->whereIn('id', request()->user()->accessibleClinicIds()))
             ->orderByRaw("CASE WHEN code = 'HN-08' THEN 0 ELSE 1 END")->orderBy('sort_order')->get(['id', 'name', 'department', 'status']);
+        $clinic = $clinics->first();
+        $profile = $clinic ? BillingProfile::query()->with('service:id,code,name,default_price,tax_type,is_active')
+            ->where('clinic_id', $clinic->id)->where('certificate_kind', strtoupper($kind))->where('is_active', true)
+            ->whereHas('service', fn ($query) => $query->where('is_active', true))->first() : null;
 
         return Inertia::render('Admin/Documents/Generate', [
             'kind' => $kind,
             'patients' => Patient::accessibleTo(request()->user())->orderBy('last_name')->get(['id', 'first_name', 'last_name', 'document_type', 'document_number', 'birth_date', 'age'])
                 ->makeVisible('document_number'),
             'provider' => config('institution.provider'),
-            'clinic' => $clinics->first(),
+            'clinic' => $clinic,
             'canIssue' => request()->user()->hasAnyRole(UserRole::SUPER_ADMIN, UserRole::ADMINISTRATOR)
                 || (request()->user()->role === UserRole::DOCTOR && request()->user()->doctor?->credential_number === config('institution.provider.credential_number')),
+            'quickBilling' => $profile && request()->user()->can('create', Invoice::class) ? [
+                'service' => $profile->service->name,
+                'quantity' => $profile->default_quantity,
+                'unit_price' => $profile->unitPrice(),
+                'tax_category' => $profile->tax_category->value,
+                'payment_method' => $profile->default_payment_method,
+            ] : null,
         ]);
     }
 
@@ -65,9 +79,19 @@ class GeneratedMedicalDocumentController extends Controller
         GenerateMedicalDocumentService $service,
         MedicalDocumentIssueService $issuer,
         MedicalDocumentAuditService $audit,
+        QuickBillingCoordinator $quickBilling,
     ): RedirectResponse {
         abort_unless(in_array($kind, ['constancia', 'incapacidad'], true), 404);
         $data = $request->safe()->except('confirm');
+        abort_unless($request->user()->hasClinicAccess($data['clinic_id']), 403);
+        $profile = null;
+        if ($request->boolean('quick_invoice')) {
+            $this->authorize('create', Invoice::class);
+            $profile = BillingProfile::query()->with('service')
+                ->where('clinic_id', $data['clinic_id'])->where('certificate_kind', strtoupper($kind))->where('is_active', true)
+                ->whereHas('service', fn ($query) => $query->where('is_active', true))->first();
+            abort_unless($profile, 422, 'No hay un perfil de facturación rápida activo para esta clínica y tipo de certificado.');
+        }
         if (empty($data['patient_id'])) {
             abort_unless($request->boolean('create_patient'), 422, 'Debe confirmar la creación del paciente detectado.');
             [$firstName, $lastName] = $this->splitName($data['patient_name']);
@@ -84,6 +108,12 @@ class GeneratedMedicalDocumentController extends Controller
 
         if (($data['intent'] ?? 'draft') === 'issue') {
             $this->authorize('issue', $document);
+            if ($profile) {
+                $result = $quickBilling->issue($document, $profile, $request->user());
+
+                return redirect()->route('admin.documents.review', $result['document'])
+                    ->with('status', 'Documento y factura emitidos. Ambos PDF quedaron vinculados y disponibles para descarga.');
+            }
             $document->forceFill([
                 'inconsistencies' => [],
                 'reviewed_by' => $request->user()->id,

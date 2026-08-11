@@ -27,6 +27,7 @@ const responsiveSet = (path: string) => `${path.replace('-1280.webp', '-640.webp
                 width="1280"
                 height="853"
                 :alt="`Atención de ${specialty.name}`"
+                loading="eager"
                 decoding="async"
                 fetchpriority="high"
             />

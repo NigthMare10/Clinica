@@ -9,6 +9,10 @@ class PdfToolAvailabilityService
 {
     public function path(string $tool): ?string
     {
+        $explicit = (string) env(strtoupper($tool).'_PATH', '');
+        if ($explicit !== '' && is_file($explicit)) {
+            return $explicit;
+        }
         $configured = (string) config("medical_documents.binaries.$tool");
         if ($configured === '') {
             return null;
@@ -23,10 +27,21 @@ class PdfToolAvailabilityService
         }
 
         if (PHP_OS_FAMILY === 'Windows') {
+            $where = new Process(['where.exe', $tool]);
+            $where->setTimeout(3)->run();
+            foreach (preg_split('/\R/', trim($where->getOutput())) ?: [] as $candidate) {
+                if (is_file($candidate)) {
+                    return $candidate;
+                }
+            }
             $candidates = match ($tool) {
                 'qpdf' => glob('C:/Program Files/qpdf */bin/qpdf.exe') ?: [],
                 'tesseract' => ['C:/Program Files/Tesseract-OCR/tesseract.exe'],
-                'pdftotext', 'pdftoppm', 'pdfinfo' => glob((getenv('LOCALAPPDATA') ?: '').'/Microsoft/WinGet/Packages/oschwartz10612.Poppler_*/poppler-*/Library/bin/'.$tool.'.exe') ?: [],
+                'pdftotext', 'pdftoppm', 'pdfinfo' => array_merge(
+                    glob((getenv('LOCALAPPDATA') ?: '').'/Microsoft/WinGet/Packages/oschwartz10612.Poppler_*/poppler-*/Library/bin/'.$tool.'.exe') ?: [],
+                    glob('C:/Users/*/AppData/Local/Microsoft/WinGet/Packages/oschwartz10612.Poppler_*/poppler-*/Library/bin/'.$tool.'.exe') ?: [],
+                    ["C:/Program Files/poppler/Library/bin/$tool.exe", "C:/Program Files/poppler/bin/$tool.exe", "C:/tools/poppler/Library/bin/$tool.exe", "C:/ProgramData/chocolatey/bin/$tool.exe", str_replace('\\', '/', (getenv('USERPROFILE') ?: '')."/scoop/apps/poppler/current/Library/bin/$tool.exe")]
+                ),
                 default => [],
             };
             foreach (array_reverse($candidates) as $candidate) {

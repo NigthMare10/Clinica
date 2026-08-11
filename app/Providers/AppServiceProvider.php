@@ -3,12 +3,14 @@
 namespace App\Providers;
 
 use App\Models\Doctor;
+use App\Models\Invoice;
 use App\Models\Patient;
 use App\Models\PdfTemplate;
 use App\Models\Setting;
 use App\Models\SitePage;
 use App\Models\Specialty;
 use App\Policies\AdminResourcePolicy;
+use App\Policies\InvoicePolicy;
 use App\Policies\PatientPolicy;
 use App\Policies\ReferenceResourcePolicy;
 use Illuminate\Support\Facades\Gate;
@@ -36,6 +38,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SitePage::class, AdminResourcePolicy::class);
         Gate::policy(Doctor::class, ReferenceResourcePolicy::class);
         Gate::policy(Patient::class, PatientPolicy::class);
+        Gate::policy(Invoice::class, InvoicePolicy::class);
         Vite::prefetch(concurrency: 3);
     }
 }

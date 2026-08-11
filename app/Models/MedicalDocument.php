@@ -26,7 +26,7 @@ class MedicalDocument extends Model
     {
         return ['type' => MedicalDocumentType::class, 'status' => MedicalDocumentStatus::class,
             'confirmed_fields' => 'array', 'inconsistencies' => 'array', 'processing_metadata' => 'array', 'template_snapshot' => 'array',
-            'consultation_date' => 'date', 'leave_start_date' => 'date', 'leave_end_date' => 'date', 'generated_at' => 'datetime',
+            'consultation_date' => 'date', 'leave_start_date' => 'date', 'leave_end_date' => 'date', 'generated_at' => 'datetime', 'revision_number' => 'integer', 'is_current_revision' => 'boolean',
             'digital_signature_detected' => 'boolean', 'reviewed_at' => 'datetime', 'issued_at' => 'datetime', 'revoked_at' => 'datetime'];
     }
 
@@ -57,7 +57,7 @@ class MedicalDocument extends Model
                 return;
             }
 
-            $lifecycle = ['status', 'revoked_at', 'revoked_by', 'revocation_reason', 'replaced_by_id', 'updated_at'];
+            $lifecycle = ['status', 'revoked_at', 'revoked_by', 'revocation_reason', 'replaced_by_id', 'is_current_revision', 'updated_at'];
             $dirtyProtected = array_diff(array_keys($document->getDirty()), $lifecycle);
             if ($dirtyProtected !== []) {
                 throw new \DomainException('Issued, revoked, and replaced document content is immutable; create a reissue.');
@@ -132,6 +132,11 @@ class MedicalDocument extends Model
         return $this->hasMany(self::class, 'reissue_of_id');
     }
 
+    public function revision()
+    {
+        return $this->hasOne(MedicalDocumentRevision::class);
+    }
+
     public function replacedBy()
     {
         return $this->belongsTo(self::class, 'replaced_by_id');
@@ -160,5 +165,10 @@ class MedicalDocument extends Model
     public function verificationLogs()
     {
         return $this->hasMany(DocumentVerificationLog::class);
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
     }
 }

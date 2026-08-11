@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\InvoiceStatus;
 use App\Enums\MedicalDocumentStatus;
 use App\Enums\MedicalDocumentType;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CorrectMedicalDocumentRequest;
 use App\Http\Requests\ReviewMedicalDocumentRequest;
 use App\Http\Requests\StoreMedicalDocumentRequest;
 use App\Jobs\ProcessMedicalDocument;
 use App\Models\DocumentVersion;
+use App\Models\Invoice;
 use App\Models\MedicalDocument;
 use App\Models\Patient;
 use App\Models\PdfTemplate;
@@ -17,6 +20,8 @@ use App\Services\MedicalDocuments\DocumentHashService;
 use App\Services\MedicalDocuments\MedicalDocumentAuditService;
 use App\Services\MedicalDocuments\MedicalDocumentConsistencyService;
 use App\Services\MedicalDocuments\MedicalDocumentIssueService;
+use App\Services\MedicalDocuments\MedicalDocumentRevisionRenderService;
+use App\Services\MedicalDocuments\MedicalDocumentRevisionService;
 use App\Support\InstitutionalMedicalProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,15 +75,59 @@ class MedicalDocumentController extends Controller
         return redirect()->route('admin.documents.review', $document);
     }
 
-    public function review(MedicalDocument $document): Response
+    public function review(Request $request, MedicalDocument $document): Response
     {
         $this->authorize('view', $document);
 
-        return Inertia::render('Admin/Documents/Review', ['document' => $document->load(['patient', 'doctor', 'extractions' => fn ($q) => $q->latest()]),
-            'doctors' => [app(InstitutionalMedicalProvider::class)->doctor()], 'patients' => Patient::orderBy('last_name')->get()]);
+        $comparisonFields = ['consultation_date', 'consultation_time', 'age_at_consultation', 'symptoms', 'medical_reason', 'diagnosis',
+            'leave_start_date', 'leave_end_date', 'leave_days', 'treatment', 'recommendations', 'observations'];
+        $snapshotValues = static function (array $snapshot) use ($comparisonFields): array {
+            $confirmed = $snapshot['confirmed_fields'] ?? [];
+            if (is_string($confirmed)) {
+                $confirmed = json_decode($confirmed, true) ?: [];
+            }
+
+            return collect($comparisonFields)->mapWithKeys(fn (string $field) => [$field => $snapshot[$field] ?? $confirmed[$field] ?? null])->all();
+        };
+        $revisions = MedicalDocument::query()
+            ->when($document->public_code, fn ($query, $code) => $query->where('public_code', $code), fn ($query) => $query->whereKey($document->id))
+            ->with(['revision.corrector:id,name', 'issuer:id,name', 'uploader:id,name'])
+            ->orderBy('revision_number')->get();
+        $revisionHistory = $revisions->map(function (MedicalDocument $item) use ($snapshotValues): array {
+            $revision = $item->revision;
+            $before = $revision ? $snapshotValues($revision->source_snapshot ?? []) : [];
+            $after = $revision ? $snapshotValues($revision->current_snapshot ?? $item->getAttributes()) : [];
+            $changes = collect($after)->filter(fn ($value, $field) => ($before[$field] ?? null) != $value)
+                ->map(fn ($value, $field) => ['field' => $field, 'before' => $before[$field] ?? null, 'after' => $value])->values();
+
+            return ['id' => $item->id, 'number' => $item->revision_number, 'status' => $item->status->value,
+                'current' => $item->is_current_revision, 'reason' => $revision?->reason,
+                'actor' => $revision?->corrector?->name ?? $item->issuer?->name ?? $item->uploader?->name,
+                'created_at' => ($revision?->created_at ?? $item->issued_at ?? $item->created_at)?->toIso8601String(),
+                'sha256' => $item->issued_sha256 ?: $item->original_sha256, 'changes' => $changes];
+        });
+        $canViewInvoices = $request->user()->can('viewAny', Invoice::class);
+        $relatedInvoices = $canViewInvoices ? $document->invoices()->latest()->get(['id', 'status', 'ncf', 'issued_at'])->map(fn (Invoice $invoice) => [
+            'id' => $invoice->id, 'status' => $invoice->status->value, 'ncf' => $invoice->ncf,
+            'issued_at' => $invoice->issued_at?->toIso8601String(),
+            'download_url' => $invoice->status === InvoiceStatus::ISSUED ? route('admin.invoices.download', $invoice) : null,
+        ]) : collect();
+
+        return Inertia::render('Admin/Documents/Review', [
+            'document' => $document->load(['patient', 'doctor', 'extractions' => fn ($q) => $q->latest(), 'revision']),
+            'revisionHistory' => $revisionHistory,
+            'relatedInvoices' => $relatedInvoices,
+            'hasIssuedInvoice' => $relatedInvoices->contains(fn (array $invoice) => $invoice['status'] === InvoiceStatus::ISSUED->value),
+            'canCorrect' => $request->user()->can('correct', $document)
+                && in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true)
+                && ! $document->reissues()->whereIn('status', [MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY, MedicalDocumentStatus::ISSUED])->exists(),
+            'canCreateInvoice' => $document->status === MedicalDocumentStatus::ISSUED && $request->user()->can('create', Invoice::class),
+            'doctors' => [app(InstitutionalMedicalProvider::class)->doctor()],
+            'patients' => Patient::orderBy('last_name')->get(),
+        ]);
     }
 
-    public function confirm(ReviewMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentAuditService $audit, MedicalDocumentConsistencyService $consistency): RedirectResponse
+    public function confirm(ReviewMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentAuditService $audit, MedicalDocumentConsistencyService $consistency, MedicalDocumentRevisionRenderService $revisionRenderer): RedirectResponse
     {
         abort_unless(in_array($document->status, [MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY], true), 422);
         $data = $request->validated();
@@ -106,6 +155,7 @@ class MedicalDocumentController extends Controller
         $document->fill([...$canonical, 'confirmed_fields' => $data['fields']]);
         $document->forceFill(['inconsistencies' => $issues, 'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(), 'status' => $approved ? MedicalDocumentStatus::READY : MedicalDocumentStatus::REVIEW_REQUIRED])->save();
+        $revisionRenderer->regenerate($document);
         $audit->record($document, $approved ? 'approved' : 'review_saved', $request->user());
 
         return back()->with('status', $approved ? 'Document approved.' : 'Review saved; blocking issues remain.');
@@ -134,26 +184,9 @@ class MedicalDocumentController extends Controller
         return back()->with('status', 'Document revoked.');
     }
 
-    public function reissue(Request $request, MedicalDocument $document, MedicalDocumentAuditService $audit): RedirectResponse
+    public function correct(CorrectMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentRevisionService $service): RedirectResponse
     {
-        $this->authorize('issue', $document);
-        $copy = DB::transaction(function () use ($document, $request) {
-            $source = MedicalDocument::query()->lockForUpdate()->findOrFail($document->id);
-            abort_unless(in_array($source->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true), 422);
-            abort_if($source->reissues()->whereNotIn('status', [MedicalDocumentStatus::FAILED->value, MedicalDocumentStatus::REVOKED->value])->exists(), 422, 'An active replacement already exists.');
-            $copy = $source->replicate(['status', 'token_hash', 'public_code', 'issued_path', 'issued_sha256', 'issued_by', 'issued_at',
-                'revoked_by', 'revoked_at', 'revocation_reason', 'reviewed_by', 'reviewed_at', 'replaced_by_id',
-                'processing_metadata', 'inconsistencies', 'digital_signature_detected']);
-            $copy->forceFill(['id' => (string) Str::uuid(), 'status' => MedicalDocumentStatus::PROCESSING,
-                'reissue_of_id' => $source->id, 'uploaded_by' => $request->user()->id])->save();
-
-            return $copy;
-        });
-        DocumentVersion::create(['medical_document_id' => $copy->id, 'created_by' => $request->user()->id,
-            'version' => 1, 'kind' => 'original', 'path' => $copy->original_path, 'sha256' => $copy->original_sha256,
-            'metadata' => ['reused_immutable_original_from' => $document->id]]);
-        $audit->record($copy, 'reissue_created', $request->user(), metadata: ['source_id' => $document->id]);
-        ProcessMedicalDocument::dispatch($copy->id);
+        $copy = $service->create($document, $request->validated('reason'), $request->user());
 
         return redirect()->route('admin.documents.review', $copy);
     }

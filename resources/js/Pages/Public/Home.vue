@@ -5,13 +5,14 @@ import PublicLayout from '@/Layouts/PublicLayout.vue';
 import PageMeta from '@/Components/PageMeta.vue';
 import { useScrollReveal } from '@/Composables/useScrollReveal';
 import type { Clinic, Specialty } from '@/types';
-import 'leaflet/dist/leaflet.css';
 
 const props = defineProps<{ specialties: Specialty[]; clinics: Clinic[] }>();
 const miniMap = ref<HTMLElement | null>(null);
 const miniMapReady = ref(false);
 let disposeMap: (() => void) | undefined;
 let mapObserver: IntersectionObserver | undefined;
+let mapLoading: Promise<void> | undefined;
+let destroyed = false;
 
 const specialtyImage = (specialty: Specialty) => specialty.image_path || '/images/photography/female-doctor-consultation-1280.webp';
 const responsiveSet = (path: string) => `${path.replace('-1280.webp', '-640.webp')} 640w, ${path} 1280w`;
@@ -19,11 +20,17 @@ const imageFallback = (event: Event) => { (event.target as HTMLImageElement).src
 
 useScrollReveal();
 const initializeMap = async () => {
-    if (!miniMap.value) return;
-    try {
-        const leaflet = await import('leaflet');
+    if (mapLoading) return mapLoading;
+    mapLoading = (async () => {
+      if (!miniMap.value || destroyed) return;
+      try {
+        const [leaflet] = await Promise.all([
+            import('leaflet'),
+            import('leaflet/dist/leaflet.css'),
+        ]);
+        if (!miniMap.value || destroyed) return;
         const map = leaflet.map(miniMap.value, { scrollWheelZoom: false, zoomControl: false }).setView([14.65, -86.55], 6.7);
-        const tiles = leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' });
+        const tiles = leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' });
         tiles.on('tileload', () => { miniMapReady.value = true; });
         tiles.addTo(map);
         props.clinics.forEach((clinic) => {
@@ -33,7 +40,9 @@ const initializeMap = async () => {
         });
         window.setTimeout(() => map.invalidateSize(), 250);
         disposeMap = () => map.remove();
-    } catch { miniMapReady.value = false; }
+      } catch { miniMapReady.value = false; }
+    })();
+    return mapLoading;
 };
 onMounted(() => {
     if (!miniMap.value) return;
@@ -44,7 +53,7 @@ onMounted(() => {
     }, { rootMargin: '300px' });
     mapObserver.observe(miniMap.value);
 });
-onUnmounted(() => { mapObserver?.disconnect(); disposeMap?.(); });
+onUnmounted(() => { destroyed = true; mapObserver?.disconnect(); disposeMap?.(); });
 </script>
 
 <template>
@@ -54,7 +63,7 @@ onUnmounted(() => { mapObserver?.disconnect(); disposeMap?.(); });
         <section class="premium-hero">
             <div class="premium-hero__glow"></div>
             <div class="container premium-hero__grid">
-                <div class="premium-hero__copy" data-reveal>
+                <div class="premium-hero__copy">
                     <p class="eyebrow"><span></span> Salud para toda Honduras</p>
                     <h1>Tu salud en <em>manos confiables</em></h1>
                     <p class="premium-hero__lead">14 años brindando atención médica con cercanía, responsabilidad y cobertura nacional.</p>
@@ -68,13 +77,13 @@ onUnmounted(() => { mapObserver?.disconnect(); disposeMap?.(); });
                         <div><strong>Atención disponible siempre</strong><span>Emergencias 24 horas, todos los días</span></div>
                     </div>
                 </div>
-                <div class="premium-hero__visual" data-reveal data-parallax>
-                    <img src="/images/photography/female-doctor-consultation-1280.webp" srcset="/images/photography/female-doctor-consultation-640.webp 640w, /images/photography/female-doctor-consultation-1280.webp 1280w" sizes="(max-width: 760px) 100vw, 50vw" width="1280" height="947" alt="Doctora conversando con una paciente durante una consulta" decoding="async" fetchpriority="high">
+                <div class="premium-hero__visual">
+                    <img src="/images/photography/female-doctor-consultation-1280.webp" srcset="/images/photography/female-doctor-consultation-640.webp 640w, /images/photography/female-doctor-consultation-1280.webp 1280w" sizes="(max-width: 760px) 100vw, 590px" width="1280" height="947" alt="Doctora conversando con una paciente durante una consulta" loading="eager" decoding="async" fetchpriority="high">
                     <div class="floating-card floating-card--top"><span class="pulse-dot"></span><div><small>Red activa</small><strong>18 clínicas en Honduras</strong></div></div>
                     <div class="floating-card floating-card--bottom"><b>14</b><div><strong>Años de experiencia</strong><small>Cuidado médico cercano</small></div></div>
                     <div class="hero-seal"><span>✓</span><small>Documentos<br>verificables</small></div>
                 </div>
-                <div class="specialty-cloud" data-reveal><span>También atendemos</span><Link v-for="item in specialties" :key="`quick-${item.id}`" :href="route('public.specialties.show', item.slug)">{{ item.name }}</Link></div>
+                <div class="specialty-cloud"><span>También atendemos</span><Link v-for="item in specialties" :key="`quick-${item.id}`" :href="route('public.specialties.show', item.slug)">{{ item.name }}</Link></div>
             </div>
         </section>
 
@@ -92,7 +101,7 @@ onUnmounted(() => { mapObserver?.disconnect(); disposeMap?.(); });
                 <div class="section-heading" data-reveal><div><p class="eyebrow">Cuidado integral</p><h2>Especialidades cerca de ti</h2><p class="section-intro">Atención preventiva y especializada para cada etapa de la vida.</p></div><Link class="text-link" :href="route('public.specialties.index')">Explorar todas →</Link></div>
                 <div class="premium-specialty-grid">
                     <Link v-for="item in specialties.slice(0, 6)" :key="item.id" class="premium-specialty-card" :href="route('public.specialties.show', item.slug)" data-reveal>
-                        <img :src="specialtyImage(item)" :srcset="responsiveSet(specialtyImage(item))" sizes="(max-width: 760px) 100vw, 33vw" width="1280" height="853" :alt="`Atención profesional en ${item.name}`" loading="lazy" decoding="async" @error="imageFallback">
+                        <img :src="specialtyImage(item)" :srcset="responsiveSet(specialtyImage(item))" sizes="(max-width: 760px) calc(100vw - 28px), 380px" width="1280" height="853" :alt="`Atención profesional en ${item.name}`" loading="lazy" decoding="async" @error="imageFallback">
                         <div class="premium-specialty-card__shade"></div>
                         <div class="premium-specialty-card__body"><span>Atención especializada</span><h3>{{ item.name }}</h3><p>{{ item.short_description }}</p><b>Ver especialidad <i>→</i></b></div>
                     </Link>
@@ -114,7 +123,7 @@ onUnmounted(() => { mapObserver?.disconnect(); disposeMap?.(); });
         <section class="section network-preview">
             <div class="container network-preview__grid">
                 <div data-reveal><p class="eyebrow">Red Santa Ana</p><h2>Atención con cobertura nacional.</h2><p class="lead">18 clínicas conectadas para acercar servicios médicos a cada departamento de Honduras.</p><ul class="network-facts"><li><span>✓</span> Presencia en los 18 departamentos</li><li><span>✓</span> Directorio y ubicaciones referenciales</li><li><span>✓</span> Atención coordinada y confiable</li></ul><Link class="button button--primary" :href="route('public.clinics.index')">Explorar mapa completo →</Link></div>
-                <div class="mini-map-shell" data-reveal><img class="mini-map-fallback" src="/images/maps/honduras-fallback.svg" width="900" height="540" alt="Mapa geográfico de Honduras con cobertura en sus 18 departamentos" loading="lazy" decoding="async"><div ref="miniMap" :class="['mini-map',{ready:miniMapReady}]" aria-label="Mapa interactivo de cobertura en Honduras"></div><div class="mini-map__label"><strong>{{ clinics.length }} ubicaciones</strong><span>Atención 24/7</span></div></div>
+                <div class="mini-map-shell" data-reveal @pointerenter="initializeMap" @focusin="initializeMap"><img class="mini-map-fallback" src="/images/maps/honduras-fallback.svg" width="900" height="540" alt="Mapa geográfico de Honduras con cobertura en sus 18 departamentos" loading="lazy" decoding="async"><div ref="miniMap" :class="['mini-map',{ready:miniMapReady}]" aria-label="Mapa interactivo de cobertura en Honduras"></div><div class="mini-map__label"><strong>{{ clinics.length }} ubicaciones</strong><span>Atención 24/7</span></div></div>
             </div>
         </section>
 

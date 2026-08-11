@@ -26,6 +26,11 @@ class Patient extends Model
         return $this->hasMany(MedicalDocument::class);
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
     public function clinics()
     {
         return $this->belongsToMany(Clinic::class, 'patient_clinic')->withPivot(['medical_record_number', 'first_seen_at', 'last_seen_at'])->withTimestamps();

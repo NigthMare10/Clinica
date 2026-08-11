@@ -10,9 +10,11 @@ use Inertia\Response;
 
 class PublicVerificationController extends Controller
 {
-    public function lookup(): Response
+    public function lookup(Request $request): Response
     {
-        return Inertia::render('Public/Verify/Lookup');
+        return Inertia::render('Public/Verify/Lookup', [
+            'initialCode' => mb_substr($request->string('code')->toString(), 0, 40),
+        ]);
     }
 
     public function token(Request $request, string $token, MedicalDocumentVerificationService $service): Response

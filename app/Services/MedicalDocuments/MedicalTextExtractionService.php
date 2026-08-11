@@ -50,7 +50,7 @@ class MedicalTextExtractionService
         foreach ($required as $field) {
             $checks[$field] = ! empty($fields[$field]);
         }
-        $conflicts = $this->validate($fields, $kind);
+        $conflicts = $this->validate($fields, $kind, $text);
         $detected = count(array_filter($checks));
 
         return [
@@ -94,8 +94,8 @@ class MedicalTextExtractionService
     private function extractConsultationDate(string $text): ?string
     {
         $value = $this->match($text, [
-            '/(?:acudi[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el\s+d[ií]a|fue\s+atendid[oa]\s+el|consulta\s+realizada\s+el)\s+(\d{1,2}\s+de\s+[\p{L}]+\s+de\s+\d{4})/iu',
-            '/(?:acudi[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el\s+d[ií]a|fue\s+atendid[oa]\s+el|consulta\s+realizada\s+el)\s+(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/iu',
+            '/'.$this->consultationPrefix().'\s+(\d{1,2}\s+de\s+[\p{L}]+\s+de\s+\d{4})/iu',
+            '/'.$this->consultationPrefix().'\s+(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/iu',
         ]);
 
         return $this->date($value);
@@ -144,7 +144,7 @@ class MedicalTextExtractionService
     private function extractDiagnosis(string $text): ?string
     {
         return $this->match($text, [
-            '/(?:se\s+establece\s+diagn[oó]stico(?:\s+presuntivo)?\s+de|se\s+diagnostic[oó](?:\s+con)?|diagn[oó]stico\s+presuntivo\s+de)\s+(.+?)(?=,?\s*recomend[aá]ndose|\.\s*(?:Por\s+lo\s+anterior|Se\s+recomienda)|\n\n|$)/isu',
+            '/(?:se\s+establece\s+diagn[oó]stico(?:\s+presuntivo)?\s+de|se\s+diagnostic[oó](?:\s+con)?|diagn[oó]stico\s+presuntivo\s+de)\s+(.+?)(?=,?\s*recomend[aá]ndose|\.(?:\s|$)|\n\n|$)/isu',
             '/compatibles?\s+con\s+(.+?)(?=,?\s*(?:limitando|recomend[aá]ndose)|\.|\n\n|$)/isu',
         ]);
     }
@@ -158,7 +158,7 @@ class MedicalTextExtractionService
 
     private function extractDays(string $text): ?int
     {
-        if (! preg_match('/(?:incapacidad\s+m[eé]dica\s+por|se\s+otorgan|reposo\s+por)\s+([\p{L}]+|\d+)\s*(?:\((\d+)\))?\s+d[ií]as/iu', $text, $matches)) {
+        if (! preg_match('/(?:se\s+extiende\s+incapacidad(?:\s+m[eé]dica)?\s+por|incapacidad\s+m[eé]dica\s+por|se\s+otorgan|reposo\s+por)\s+([\p{L}]+|\d+)\s*(?:\((\d+)\))?\s+d[ií]as/iu', $text, $matches)) {
             return null;
         }
         if (! empty($matches[2])) {
@@ -187,21 +187,37 @@ class MedicalTextExtractionService
         return [null, null];
     }
 
-    private function validate(array $fields, string $kind): array
+    private function validate(array $fields, string $kind, string $text): array
     {
         $conflicts = [];
+        $consultationDates = $this->consultationDates($text);
+        if (count($consultationDates) > 1) {
+            $conflicts[] = ['field' => 'consultation_date', 'code' => 'consultation_date_conflict', 'message' => 'El texto contiene fechas de consulta diferentes.', 'blocking' => true];
+        }
         if ($kind !== 'incapacidad' || ! $fields['leave_start_date'] || ! $fields['leave_end_date']) {
             return $conflicts;
         }
         $start = CarbonImmutable::parse($fields['leave_start_date']);
         $end = CarbonImmutable::parse($fields['leave_end_date']);
         if ($start->greaterThan($end)) {
-            $conflicts[] = ['field' => 'leave_end_date', 'code' => 'start_after_end', 'message' => 'La fecha inicial no puede ser posterior a la fecha final.'];
+            $conflicts[] = ['field' => 'leave_end_date', 'code' => 'start_after_end', 'message' => 'La fecha inicial no puede ser posterior a la fecha final.', 'blocking' => true];
         } elseif ($fields['leave_days'] && ($calculated = (int) $start->diffInDays($end) + 1) !== $fields['leave_days']) {
-            $conflicts[] = ['field' => 'leave_days', 'code' => 'days_mismatch', 'message' => "El periodo corresponde a {$calculated} días inclusivos."];
+            $conflicts[] = ['field' => 'leave_days', 'code' => 'days_mismatch', 'message' => "El periodo corresponde a {$calculated} días inclusivos.", 'blocking' => true];
         }
 
         return $conflicts;
+    }
+
+    private function consultationDates(string $text): array
+    {
+        preg_match_all('/'.$this->consultationPrefix().'\s+(\d{1,2}\s+de\s+[\p{L}]+\s+de\s+\d{4}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/iu', $text, $matches);
+
+        return array_values(array_unique(array_filter(array_map(fn (string $value) => $this->date($value), $matches[1]))));
+    }
+
+    private function consultationPrefix(): string
+    {
+        return '(?:acudi[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el(?:\s+d[ií]a)?|se\s+present[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el(?:\s+d[ií]a)?|fue\s+atendid[oa]\s+el|consulta\s+realizada\s+el)';
     }
 
     private function date(?string $value): ?string

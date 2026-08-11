@@ -22,12 +22,13 @@ useScrollReveal();
                     width="1280"
                     height="960"
                     alt="Atrio y recepción de un centro hospitalario moderno"
+                    loading="eager"
                     decoding="async"
                     fetchpriority="high"
                 />
             </div>
             <div class="clinic-story-hero__shade"></div>
-            <div class="container" data-reveal>
+            <div class="container">
                 <p class="eyebrow">Clínica Médica Santa Ana</p>
                 <h1>{{ page?.title || "Cuidamos la salud de Honduras" }}</h1>
                 <p>

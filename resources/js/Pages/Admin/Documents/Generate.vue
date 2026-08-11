@@ -18,7 +18,8 @@ type Analysis = {
     conflicts: Array<{ field: string; message: string }>; requires_review: boolean;
     patient: { id: string; name: string; document_number: string } | null;
 };
-const props = defineProps<{ kind: 'constancia' | 'incapacidad'; provider: Provider; clinic: Clinic | null; canIssue: boolean }>();
+type QuickBilling = { service: string; quantity: string; unit_price: string; tax_category: string; payment_method: string };
+const props = defineProps<{ kind: 'constancia' | 'incapacidad'; provider: Provider; clinic: Clinic | null; canIssue: boolean; quickBilling: QuickBilling | null }>();
 const analysis = ref<Analysis | null>(null);
 const analyzing = ref(false);
 const analysisError = ref('');
@@ -29,12 +30,14 @@ const form = useForm({
     medical_reason: '', diagnosis: '', recommendations: '', leave_start_date: '', leave_end_date: '',
     leave_days: null as number | null, free_text: '', create_patient: false, confirm: false,
     intent: 'draft' as 'draft' | 'issue',
+    quick_invoice: false,
 });
 const title = computed(() => props.kind === 'incapacidad' ? 'Nueva incapacidad' : 'Nueva constancia');
 const ready = computed(() => Boolean(form.patient_name && form.identity && form.consultation_date && form.diagnosis
     && (props.kind === 'constancia' || (form.leave_start_date && form.leave_end_date && form.leave_days))));
 const previewParagraphs = computed(() => form.free_text.replaceAll('**', '').replaceAll('__', '').split(/\n\s*\n/).filter(Boolean));
 const date = (value: string) => value ? new Intl.DateTimeFormat('es-HN', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`)) : 'No detectada';
+const money = (value: string) => new Intl.NumberFormat('es-HN', { style: 'currency', currency: 'HNL' }).format(Number(value));
 const analyze = async () => {
     analysisError.value = '';
     analyzing.value = true;
@@ -109,7 +112,9 @@ const submit = (intent: 'draft' | 'issue') => {
                         <div v-if="analysis.conflicts.length" class="analysis-conflicts"><strong>Conflictos detectados</strong><p v-for="conflict in analysis.conflicts" :key="conflict.field">⚠ {{ conflict.message }}</p></div>
                         <div class="patient-match" :class="{ new: !analysis.patient }"><strong>{{ analysis.patient ? '✓ Expediente vinculado' : 'NUEVO PACIENTE DETECTADO' }}</strong><span>{{ analysis.patient?.name || form.patient_name }}</span><label v-if="!analysis.patient"><input v-model="form.create_patient" type="checkbox"> Crear paciente automáticamente al confirmar</label></div>
                         <span v-if="form.errors.patient_id" class="field-error">{{ form.errors.patient_id }}</span>
-                        <div class="quick-actions"><button class="button button--outline" type="button" @click="mobileTab = 'preview'">Vista previa</button><button class="button button--outline" type="button" :disabled="form.processing" @click="submit('draft')">Generar borrador</button><button v-if="canIssue" class="button button--admin" type="button" :disabled="!ready || form.processing" @click="submit('issue')">Firmar y emitir</button></div>
+                        <label v-if="canIssue && quickBilling" class="quick-billing-option"><input v-model="form.quick_invoice" type="checkbox"><span><strong>Emitir factura al finalizar</strong><small>{{ quickBilling.service }} · {{ quickBilling.quantity }} × {{ money(quickBilling.unit_price) }} · {{ quickBilling.tax_category }} · {{ quickBilling.payment_method }}</small></span></label>
+                        <span v-if="form.errors.quick_invoice" class="field-error">{{ form.errors.quick_invoice }}</span>
+                        <div class="quick-actions"><button class="button button--outline" type="button" @click="mobileTab = 'preview'">Vista previa</button><button class="button button--admin" type="button" :disabled="(canIssue && !ready) || form.processing" @click="submit(canIssue ? 'issue' : 'draft')">{{ canIssue ? (form.quick_invoice ? 'Emitir documento y factura' : 'Firmar y emitir documento') : 'Generar borrador' }}</button></div>
                     </div>
                 </div>
                 <aside :class="['certificate-preview', { 'mobile-hidden': mobileTab !== 'preview' }]">

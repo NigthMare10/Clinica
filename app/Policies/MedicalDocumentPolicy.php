@@ -48,4 +48,9 @@ class MedicalDocumentPolicy
     {
         return $user->hasClinicAccess($document->clinic_id) && $user->hasAnyRole(UserRole::ADMINISTRATOR);
     }
+
+    public function correct(User $user, MedicalDocument $document): bool
+    {
+        return $user->hasClinicAccess($document->clinic_id) && $user->hasAnyRole(UserRole::ADMINISTRATOR);
+    }
 }

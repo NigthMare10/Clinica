@@ -44,4 +44,14 @@ class Clinic extends Model
     {
         return $this->hasMany(MedicalDocument::class);
     }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function fiscalAuthorizations()
+    {
+        return $this->hasMany(FiscalAuthorization::class);
+    }
 }

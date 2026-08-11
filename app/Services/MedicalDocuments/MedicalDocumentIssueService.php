@@ -15,7 +15,7 @@ use Throwable;
 class MedicalDocumentIssueService
 {
     public function __construct(private DocumentHashService $hashes, private QrCodeService $qr,
-        private PdfStampService $stamp, private PdfEncryptionService $encryption,
+        private PdfStampService $stamp, private InstitutionalSignatureStampService $institutionalMarks, private PdfEncryptionService $encryption,
         private PdfQrVerificationService $qrVerification, private MedicalDocumentConsistencyService $consistency,
         private MedicalDocumentAuditService $audit, private PdfDocumentInspectionService $inspection) {}
 
@@ -42,18 +42,20 @@ class MedicalDocumentIssueService
                 throw new RuntimeException('Original document integrity check failed.');
             }
             $token = '';
-            $document->forceFill(['token_hash' => $this->uniqueTokenHash($token), 'public_code' => $this->uniqueCode()])->save();
+            $document->forceFill(['token_hash' => $this->uniqueTokenHash($token), 'public_code' => $document->public_code ?: $this->uniqueCode()])->save();
             $directory = storage_path('app/tmp/'.Str::uuid());
             if (! mkdir($directory, 0700, true) && ! is_dir($directory)) {
                 throw new RuntimeException('Cannot create secure working directory.');
             }
             $qrPath = $directory.DIRECTORY_SEPARATOR.'qr.png';
+            $marked = $directory.DIRECTORY_SEPARATOR.'institutional-marks.pdf';
             $stamped = $directory.DIRECTORY_SEPARATOR.'issued.pdf';
             $path = null;
             try {
                 $verificationUrl = $this->qr->verificationUrl($token);
                 $this->qr->write($verificationUrl, $qrPath);
-                $qrPage = $this->stamp->stamp($document, $original, $stamped, $qrPath);
+                $assetHashes = $this->institutionalMarks->apply($document, $original, $marked);
+                $qrPage = $this->stamp->stamp($document, $marked, $stamped, $qrPath);
                 $this->inspection->assertOnePage($stamped);
                 $this->qrVerification->assertReadable($stamped, $qrPage, $verificationUrl, $directory, $document);
                 $source = $stamped;
@@ -90,18 +92,28 @@ class MedicalDocumentIssueService
                     'qr_verified' => true,
                     'hash_algorithm' => 'SHA-256',
                 ];
+                if ($assetHashes !== []) {
+                    $snapshot['institutional_marks'] = $assetHashes;
+                }
                 $document->forceFill(['issued_path' => $path, 'issued_sha256' => $issuedHash,
                     'issued_by' => $user->id, 'issued_at' => now(), 'status' => MedicalDocumentStatus::ISSUED,
-                    'template_snapshot' => $snapshot])->save();
+                    'template_snapshot' => $snapshot, 'is_current_revision' => true])->save();
                 if ($document->reissue_of_id) {
                     $source->forceFill([
                         'status' => MedicalDocumentStatus::REPLACED,
                         'replaced_by_id' => $document->id,
+                        'is_current_revision' => false,
                     ])->save();
                 }
                 DocumentVersion::create(['medical_document_id' => $document->id, 'created_by' => $user->id,
                     'version' => ((int) $document->versions()->max('version')) + 1, 'kind' => 'issued', 'path' => $path, 'sha256' => $issuedHash]);
+                if ($document->revision) {
+                    $document->revision->update(['current_snapshot' => $this->snapshot($document)]);
+                }
                 $this->audit->record($document, 'issued', $user, metadata: ['sha256' => $issuedHash]);
+                foreach (array_keys($assetHashes) as $kind) {
+                    $this->audit->record($document, strtoupper($kind).'_USED', $user, metadata: ['document_id' => $document->id, 'user_id' => $user->id, 'asset_sha256' => $assetHashes[$kind]]);
+                }
             } catch (Throwable $exception) {
                 if ($path) {
                     $disk->delete($path);
@@ -136,5 +148,10 @@ class MedicalDocumentIssueService
         } while (MedicalDocument::where('public_code', $code)->exists());
 
         return $code;
+    }
+
+    private function snapshot(MedicalDocument $document): array
+    {
+        return collect($document->getAttributes())->except(['token_hash', 'original_path', 'issued_path'])->all();
     }
 }

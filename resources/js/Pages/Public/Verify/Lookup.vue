@@ -8,16 +8,23 @@ type Tab = "code" | "file" | "qr";
 type Barcode = { rawValue: string };
 type Reader = { detect: (source: HTMLVideoElement) => Promise<Barcode[]> };
 type ReaderConstructor = new (options: { formats: string[] }) => Reader;
+const props = defineProps<{ initialCode?: string }>();
 const tab = ref<Tab>("code");
 const video = ref<HTMLVideoElement | null>(null);
 const scanning = ref(false);
 const scannerError = ref("");
-const code = useForm({ code: "", identity_last4: "" });
+const code = useForm({ code: props.initialCode || "", identity_last4: "" });
 const file = useForm<{ document: File | null }>({ document: null });
 let stream: MediaStream | undefined;
-let frame = 0;
+let scanTimer = 0;
+let scannerGeneration = 0;
 const stopScanner = () => {
-    cancelAnimationFrame(frame);
+    scannerGeneration += 1;
+    window.clearTimeout(scanTimer);
+    if (video.value) {
+        video.value.pause();
+        video.value.srcObject = null;
+    }
     stream?.getTracks().forEach((track) => track.stop());
     stream = undefined;
     scanning.value = false;
@@ -61,27 +68,32 @@ const startScanner = async () => {
             "Este navegador no ofrece lectura QR por cámara. Use el código o el archivo PDF.";
         return;
     }
+    const generation = ++scannerGeneration;
     try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        const cameraStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: "environment" } },
             audio: false,
         });
-        if (!video.value) return;
-        video.value.srcObject = stream;
+        if (generation !== scannerGeneration || !video.value) {
+            cameraStream.getTracks().forEach((track) => track.stop());
+            return;
+        }
+        stream = cameraStream;
+        video.value.srcObject = cameraStream;
         await video.value.play();
         scanning.value = true;
         const reader = new Constructor({ formats: ["qr_code"] });
         const scan = async () => {
-            if (!scanning.value || !video.value) return;
+            if (!scanning.value || !video.value || generation !== scannerGeneration) return;
             try {
                 const values = await reader.detect(video.value);
                 if (values.some((value) => acceptQr(value.rawValue))) return;
             } catch {
                 /* Frames desenfocados pueden ser ilegibles. */
             }
-            frame = requestAnimationFrame(scan);
+            scanTimer = window.setTimeout(scan, 250);
         };
-        frame = requestAnimationFrame(scan);
+        scanTimer = window.setTimeout(scan, 250);
     } catch {
         scannerError.value =
             "No fue posible acceder a la cámara. Revise el permiso o use otro método.";
@@ -107,6 +119,7 @@ onUnmounted(stopScanner);
                     width="1280"
                     height="853"
                     alt="Profesional revisando documentación con una paciente"
+                    loading="eager"
                     decoding="async"
                     fetchpriority="high"
                 />

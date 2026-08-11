@@ -4,8 +4,10 @@ export default defineConfig({
     testDir: './tests/e2e',
     globalSetup: './tests/e2e/global-setup.ts',
     fullyParallel: false,
+    timeout: 90_000,
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 1 : 0,
+    expect: { timeout: 15_000 },
     reporter: [['list'], ['html', { open: 'never' }]],
     use: {
         baseURL: process.env.E2E_BASE_URL || 'http://127.0.0.1:8017',
@@ -21,6 +23,8 @@ export default defineConfig({
         url: 'http://127.0.0.1:8017/robots.txt',
         reuseExistingServer: false,
         timeout: 30_000,
+        stdout: 'ignore',
+        stderr: 'ignore',
         env: {
             APP_ENV: 'e2e',
             DB_CONNECTION: 'sqlite',

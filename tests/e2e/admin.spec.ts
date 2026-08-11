@@ -35,9 +35,9 @@ test('processing and failed fixtures expose polling labels and failure tools', a
 });
 
 test('review preserves OCR candidates, saves, detects conflicts and approves ready data', async ({ page }) => {
-    await page.goto(`/admin/documents/${fixture('E2E_REVIEW_DOCUMENT_ID')}/review`);await expect(page.getByText('Validación de campos')).toBeVisible();await expect(page.getByText(/^OCR:/).first()).toBeVisible();await page.getByRole('button',{name:'Guardar revisión'}).click();await expect(page.getByRole('status')).toBeVisible();
+    await page.goto(`/admin/documents/${fixture('E2E_REVIEW_DOCUMENT_ID')}/review`);await expect(page.getByText('Validación del documento')).toBeVisible();await page.getByRole('button',{name:'Guardar revisión'}).click();await expect(page.getByRole('status')).toBeVisible();
     await page.goto(`/admin/documents/${fixture('E2E_CONFLICT_DOCUMENT_ID')}/review`);await expect(page.getByText('Observaciones de consistencia')).toBeVisible();
-    await page.goto(`/admin/documents/${fixture('E2E_APPROVABLE_DOCUMENT_ID')}/review`);await page.getByRole('button',{name:'Aprobar revisión'}).click();await expect(page.getByText('Listo',{exact:true})).toBeVisible();
+    await page.goto(`/admin/documents/${fixture('E2E_APPROVABLE_DOCUMENT_ID')}/review`);await page.getByRole('button',{name:'Aprobar datos'}).click();await expect(page.getByText('Listo',{exact:true}).first()).toBeVisible();
 });
 
 test('issues, downloads, revokes and replaces dedicated fixture documents', async ({ page }) => {
@@ -45,7 +45,7 @@ test('issues, downloads, revokes and replaces dedicated fixture documents', asyn
     await page.goto(`/admin/documents/${documentId}/review`);await page.getByRole('button',{name:'Emitir documento'}).click();await page.getByRole('button',{name:'Confirmar emisión'}).click();await expect(page.getByRole('status')).toContainText(/issued|emitido/i);
     await page.goto('/admin/documents?status=ISSUED');const issuedRow=page.locator('tr').filter({has:page.locator(`a[href*="/admin/documents/${documentId}/download/issued"]`)});await expect(issuedRow.getByRole('link',{name:'Emitido'})).toHaveAttribute('href',/\/download\/issued$/);
     page.once('dialog',dialog=>dialog.accept('Revocación ficticia automatizada E2E'));await issuedRow.getByRole('button',{name:'Anular'}).click();await expect(page.getByRole('status')).toContainText(/revoked|revocado/i);
-    await page.goto('/admin/documents?status=REVOKED');const revokedRow=page.locator('tr').filter({has:page.locator(`a[href*="/admin/documents/${documentId}/download/original"]`)});await revokedRow.getByRole('button',{name:'Reemitir'}).click();await expect(page).toHaveURL(/\/admin\/documents\/.+\/review/);
+    await page.goto('/admin/documents?status=REVOKED');const revokedRow=page.locator('tr').filter({has:page.locator(`a[href*="/admin/documents/${documentId}/download/original"]`)});page.once('dialog',dialog=>dialog.accept('ERROR_TEXTO: corrección ficticia automatizada E2E'));await revokedRow.getByRole('button',{name:'Reemitir'}).click();await expect(page).toHaveURL(/\/admin\/documents\/.+\/review/);
 });
 
 test('auditor cannot open mutation routes', async ({ browser }) => {

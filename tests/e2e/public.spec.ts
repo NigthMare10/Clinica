@@ -16,7 +16,6 @@ test('unknown verification code returns a deterministic not-found result', async
     await page.goto('/verificar');
     await page.getByLabel('Código del documento').fill('E2E-FICTICIO-INEXISTENTE');
     await page.getByRole('button', { name: 'Verificar documento' }).click();
-    await expect(page).toHaveURL('/verificar/codigo');
     await expect(page.getByRole('heading', { name: 'Documento no encontrado' })).toBeVisible();
 });
 

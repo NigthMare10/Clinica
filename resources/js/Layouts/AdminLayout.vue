@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { onMounted, onUnmounted, ref } from 'vue';
-import { BookOpenText, ChevronLeft, ChevronRight, ClipboardPlus, FileCheck2, FileText, History, Home, Menu, Search, Settings, ShieldCheck, Stethoscope, Users } from '@lucide/vue';
+import { BookOpenText, ChevronLeft, ChevronRight, ClipboardPlus, FileCheck2, FileText, History, Home, Menu, ReceiptText, Search, Settings, ShieldCheck, Stethoscope, Users } from '@lucide/vue';
 import BrandMark from '@/Components/BrandMark.vue';
 
 defineProps<{title:string;eyebrow?:string}>();
@@ -16,6 +16,7 @@ const groups=[
         {label:'Nueva incapacidad',pattern:'admin.documents.generate',routeName:'admin.documents.generate',icon:FileCheck2,parameter:'incapacidad'},
         {label:'Documentos',pattern:'admin.documents.*',routeName:'admin.documents.index',icon:FileText},
         {label:'Pacientes',pattern:'admin.patients.*',routeName:'admin.patients.index',icon:Users},
+        {label:'Facturación',pattern:'admin.invoices.*',routeName:'admin.invoices.index',icon:ReceiptText},
         {label:'Verificaciones',pattern:'admin.verifications.*',routeName:'admin.verifications.index',icon:ShieldCheck},
     ]},
     {label:'CONFIGURACIÓN',items:[
@@ -23,6 +24,8 @@ const groups=[
         {label:'Contenido',pattern:'admin.content.*',routeName:'admin.content.index',icon:Stethoscope},
         {label:'Auditoría',pattern:'admin.audit.*',routeName:'admin.audit.index',icon:History},
         {label:'Configuración',pattern:'admin.settings.*',routeName:'admin.settings.index',icon:Settings},
+        {label:'Fiscal',pattern:'admin.fiscal-authorizations.*',routeName:'admin.fiscal-authorizations.index',icon:ReceiptText},
+        {label:'Firma y sello',pattern:'admin.settings.signature.*',routeName:'admin.settings.signature.index',icon:FileCheck2},
     ]},
 ];
 type NavItem=(typeof groups)[number]['items'][number];
