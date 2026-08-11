@@ -12,6 +12,7 @@ return [
         'pdfinfo' => env('PDFINFO_BINARY', 'pdfinfo'),
         'tesseract' => env('TESSERACT_BINARY', 'tesseract'),
         'qpdf' => env('QPDF_BINARY', 'qpdf'),
+        'gs' => env('GS_BINARY', 'gs'),
     ],
     'process_timeout' => (int) env('MEDICAL_PDF_PROCESS_TIMEOUT', 120),
     'ocr_languages' => env('MEDICAL_OCR_LANGUAGES', 'spa+eng'),
@@ -25,7 +26,8 @@ return [
     'institutional_marks' => [
         'signature' => ['x' => 30, 'y' => 216, 'width' => 42],
         'stamp' => ['x' => 106, 'y' => 211, 'width' => 35],
-        'SIGNATURE_STAMP_COMBINED' => ['x' => 30, 'y' => 205, 'width' => 82],
+        // Millimeters: 36 mm is the institutional default; safe visual range is 32-40 mm.
+        'SIGNATURE_STAMP_COMBINED' => ['x' => 57, 'y' => 222, 'width' => 36],
     ],
     'institutional_provider' => config('institution.provider'),
 ];

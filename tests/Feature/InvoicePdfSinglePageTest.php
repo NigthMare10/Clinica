@@ -33,6 +33,7 @@ class InvoicePdfSinglePageTest extends TestCase
             'invoice_pdf.encryption_enabled' => true,
             'medical_documents.disk' => 'local',
             'medical_documents.password' => 'Fiscal-Pdf-Test-Password!',
+            'fiscal_reference.reference_invoice_import.central_clinic_code' => 'PDF',
         ]);
     }
 

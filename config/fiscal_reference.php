@@ -3,6 +3,7 @@
 return [
     'reference_invoice_import' => [
         'clinic_code' => 'HN-08',
+        'central_clinic_code' => 'HN-08',
         'rtn' => '08019995307719',
         'cai' => '3A2E5B-5C6C48-E738E0-63BE03-0909F2-F8',
         'document_type' => 'FACTURA_CONTADO',

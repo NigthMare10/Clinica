@@ -5,7 +5,7 @@ import { Link, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import PageMeta from '@/Components/PageMeta.vue';
 
-type Clinic = { id: string; name: string; department: string };
+type Clinic = { id: string; name: string; department: string; address: string | null };
 type Provider = { name: string; credential_type: string; credential_number: string };
 type Fields = {
     patient_name: string | null; age: number | null; identity: string | null;
@@ -19,7 +19,7 @@ type Analysis = {
     patient: { id: string; name: string; document_number: string } | null;
 };
 type QuickBilling = { service: string; quantity: string; unit_price: string; tax_category: string; payment_method: string };
-const props = defineProps<{ kind: 'constancia' | 'incapacidad'; provider: Provider; clinic: Clinic | null; canIssue: boolean; quickBilling: QuickBilling | null }>();
+const props = defineProps<{ kind: 'constancia' | 'incapacidad'; provider: Provider; clinic: Clinic | null; clinics: Clinic[]; canIssue: boolean; quickBilling: QuickBilling | null }>();
 const analysis = ref<Analysis | null>(null);
 const analyzing = ref(false);
 const analysisError = ref('');
@@ -33,6 +33,7 @@ const form = useForm({
     quick_invoice: false,
 });
 const title = computed(() => props.kind === 'incapacidad' ? 'Nueva incapacidad' : 'Nueva constancia');
+const selectedClinic = computed(() => props.clinics.find((clinic) => clinic.id === form.clinic_id) || props.clinic);
 const ready = computed(() => Boolean(form.patient_name && form.identity && form.consultation_date && form.diagnosis
     && (props.kind === 'constancia' || (form.leave_start_date && form.leave_end_date && form.leave_days))));
 const previewParagraphs = computed(() => form.free_text.replaceAll('**', '').replaceAll('__', '').split(/\n\s*\n/).filter(Boolean));
@@ -86,6 +87,10 @@ const submit = (intent: 'draft' | 'issue') => {
             <div class="quick-certificate__grid">
                 <div :class="['quick-certificate__data', { 'mobile-hidden': mobileTab !== 'data' }]">
                     <div class="panel text-analysis">
+                        <label for="document-clinic">Ubicación que emitirá el documento</label>
+                        <select id="document-clinic" v-model="form.clinic_id" required>
+                            <option v-for="item in clinics" :key="item.id" :value="item.id">{{ item.name }} · {{ item.department }}</option>
+                        </select>
                         <label for="medical-text">Pegue aquí el contenido de la {{ kind }}</label>
                         <textarea id="medical-text" v-model="form.free_text" rows="15" placeholder="Por medio de la presente se hace constar que..."></textarea>
                         <span v-if="form.errors.free_text" class="field-error">{{ form.errors.free_text }}</span>
@@ -112,14 +117,14 @@ const submit = (intent: 'draft' | 'issue') => {
                         <div v-if="analysis.conflicts.length" class="analysis-conflicts"><strong>Conflictos detectados</strong><p v-for="conflict in analysis.conflicts" :key="conflict.field">⚠ {{ conflict.message }}</p></div>
                         <div class="patient-match" :class="{ new: !analysis.patient }"><strong>{{ analysis.patient ? '✓ Expediente vinculado' : 'NUEVO PACIENTE DETECTADO' }}</strong><span>{{ analysis.patient?.name || form.patient_name }}</span><label v-if="!analysis.patient"><input v-model="form.create_patient" type="checkbox"> Crear paciente automáticamente al confirmar</label></div>
                         <span v-if="form.errors.patient_id" class="field-error">{{ form.errors.patient_id }}</span>
-                        <label v-if="canIssue && quickBilling" class="quick-billing-option"><input v-model="form.quick_invoice" type="checkbox"><span><strong>Emitir factura al finalizar</strong><small>{{ quickBilling.service }} · {{ quickBilling.quantity }} × {{ money(quickBilling.unit_price) }} · {{ quickBilling.tax_category }} · {{ quickBilling.payment_method }}</small></span></label>
+                        <label v-if="canIssue && quickBilling" class="quick-billing-option"><input v-model="form.quick_invoice" type="checkbox"><span><strong>Crear borrador de factura al finalizar</strong><small>{{ quickBilling.service }} · {{ quickBilling.quantity }} × {{ money(quickBilling.unit_price) }} · {{ quickBilling.tax_category }} · {{ quickBilling.payment_method }} · No consume NCF</small></span></label>
                         <span v-if="form.errors.quick_invoice" class="field-error">{{ form.errors.quick_invoice }}</span>
-                        <div class="quick-actions"><button class="button button--outline" type="button" @click="mobileTab = 'preview'">Vista previa</button><button class="button button--admin" type="button" :disabled="(canIssue && !ready) || form.processing" @click="submit(canIssue ? 'issue' : 'draft')">{{ canIssue ? (form.quick_invoice ? 'Emitir documento y factura' : 'Firmar y emitir documento') : 'Generar borrador' }}</button></div>
+                        <div class="quick-actions"><button class="button button--outline" type="button" @click="mobileTab = 'preview'">Vista previa</button><button class="button button--admin" type="button" :disabled="(canIssue && !ready) || form.processing" @click="submit(canIssue ? 'issue' : 'draft')">{{ canIssue ? (form.quick_invoice ? 'Emitir documento y crear borrador' : 'Firmar y emitir documento') : 'Generar borrador' }}</button></div>
                     </div>
                 </div>
                 <aside :class="['certificate-preview', { 'mobile-hidden': mobileTab !== 'preview' }]">
                     <div class="certificate-preview__paper">
-                        <header><span class="medical-symbol">+</span><div><strong>CLÍNICA MÉDICA SANTA ANA</strong><b>{{ provider.name }}</b><small>Entrada Principal colonia Torocagua, Frente a supermercado La Colonia<br>Comayagüela M.D.C., Honduras C.A.<br>Tel: +504 9485-5657 · Atención 24/7</small></div></header>
+                        <header><span class="medical-symbol">+</span><div><strong>CLÍNICA MÉDICA SANTA ANA</strong><b>{{ provider.name }}</b><small>{{ selectedClinic?.address || 'Cobertura departamental en Honduras' }}<br>Tel: +504 9485-5657 · Atención 24/7</small></div></header>
                         <i class="double-line"></i>
                         <dl><div><dt>PACIENTE</dt><dd>{{ form.patient_name || 'Pendiente' }}</dd></div><div><dt>EDAD</dt><dd>{{ form.age_at_consultation ?? '—' }} AÑOS</dd></div><div><dt>FECHA</dt><dd>{{ date(form.consultation_date) }}</dd></div></dl>
                         <h3>{{ kind === 'incapacidad' ? 'Incapacidad Médica' : 'Constancia Médica' }}</h3>

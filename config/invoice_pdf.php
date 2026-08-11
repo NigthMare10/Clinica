@@ -9,6 +9,7 @@ return [
     'institutional_marks' => [
         'signature' => ['x' => 28, 'y' => 231, 'width' => 39],
         'stamp' => ['x' => 78, 'y' => 227, 'width' => 34],
-        'SIGNATURE_STAMP_COMBINED' => ['x' => 28, 'y' => 222, 'width' => 78],
+        // A compact 36 mm combined mark leaves the verification QR independent and readable.
+        'SIGNATURE_STAMP_COMBINED' => ['x' => 88, 'y' => 236, 'width' => 36],
     ],
 ];

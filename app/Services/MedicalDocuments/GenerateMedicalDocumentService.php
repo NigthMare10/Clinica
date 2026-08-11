@@ -11,6 +11,7 @@ use App\Models\Patient;
 use App\Models\PdfTemplate;
 use App\Models\User;
 use App\Support\InstitutionalMedicalProvider;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -70,7 +71,7 @@ class GenerateMedicalDocumentService
                     'consultation_time' => $data['consultation_time'] ?? null,
                     'doctor_name' => config('institution.provider.name'),
                     'doctor_credential' => config('institution.provider.credential_number'),
-                    'clinic_name' => config('institution.short_name'),
+                    'clinic_name' => $clinic->name,
                     'medical_reason' => $data['medical_reason'] ?? $data['free_text'],
                     'symptoms' => $data['symptoms'] ?? null,
                     'diagnosis' => $data['diagnosis'] ?? null,
@@ -107,7 +108,10 @@ class GenerateMedicalDocumentService
                     'confirmed_fields' => $fields,
                     'template_snapshot' => ($template ? ['id' => $template->id, 'version' => $template->version, 'coordinates' => $template->coordinates] : ['renderer' => 'institutional-certificate-v2']) + [
                         'free_text' => $data['free_text'] ?? null,
-                        'institution' => config('institution'),
+                        // A document snapshot needs display metadata, never administrative credentials.
+                        'institution' => array_replace(Arr::except(config('institution'), ['admin']), [
+                            'address' => $clinic->address ?: config('institution.address'),
+                        ]),
                     ],
                     'generated_at' => now(),
                 ]);

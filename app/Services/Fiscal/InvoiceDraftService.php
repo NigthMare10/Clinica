@@ -16,8 +16,13 @@ class InvoiceDraftService
         $items = $data['items'];
         unset($data['items']);
         $calculation = $this->taxes->calculate($items);
-        $paid = number_format((float) ($data['paid_total'] ?? 0), 2, '.', '');
-        $data['balance'] = number_format(max(0, (float) $calculation['totals']['total'] - (float) $paid), 2, '.', '');
+        $total = (float) $calculation['totals']['total'];
+        // A normal cash sale is fully paid unless the operator explicitly records another amount.
+        $paid = array_key_exists('paid_total', $data) && $data['paid_total'] !== null
+            ? (float) $data['paid_total']
+            : $total;
+        $data['paid_total'] = number_format($paid, 2, '.', '');
+        $data['balance'] = number_format(max($total - $paid, 0), 2, '.', '');
 
         return DB::transaction(function () use ($data, $items, $calculation, $user, $auditContext): Invoice {
             $invoice = Invoice::create($data + ['created_by' => $user->id]);

@@ -23,8 +23,9 @@ class MedicalTextExtractionService
         $text = $this->normalize($source);
         $fields = [
             'patient_name' => $this->match($text, [
-                '/(?:se\s+hace\s+constar\s+que\s+)?(?:el|la)?\s*paciente\s+([\p{L}][\p{L}\s]+?)(?=,\s*(?:de\s+)?\d{1,3}\s+años|,\s*(?:con\s+)?(?:número|numero|DNI|identidad))/iu',
-                '/se\s+hace\s+constar\s+que\s+([\p{L}][\p{L}\s]+?)(?=,\s*(?:de\s+)?\d{1,3}\s+años|,\s*(?:con\s+)?(?:número|numero|DNI|identidad))/iu',
+                '/(?:se\s+hace\s+constar\s+que\s+)?(?:el|la)?\s*paciente\s+([\p{L}][\p{L}\p{N}\s]+?)(?=,\s*(?:de\s+)?\d{1,3}\s+años|,\s*(?:con\s+)?(?:número|numero|DNI|identidad))/iu',
+                '/se\s+hace\s+constar\s+que\s+([\p{L}][\p{L}\p{N}\s]+?)(?=,\s*(?:de\s+)?\d{1,3}\s+años|,\s*(?:con\s+)?(?:número|numero|DNI|identidad))/iu',
+                '/\b([\p{L}][\p{L}\s]+?)\s+(?=se\s+present[oó]|acudi[oó]|fue\s+atendid[oa])/',
             ]),
             'age' => $this->match($text, ['/(?:de\s+)?(\d{1,3})\s+años(?:\s+de\s+edad)?/iu']),
             'identity' => $this->match($text, ['/(?:número|numero)\s+de\s+identidad\s*(?:n[.ºo°]+\s*)?[:#-]?\s*([0-9][0-9\s-]{7,20})/iu', '/\b(?:identidad|DNI)\s*(?:n[.ºo°]+\s*)?[:#-]?\s*([0-9][0-9\s-]{7,20})/iu']),
@@ -145,6 +146,7 @@ class MedicalTextExtractionService
     {
         return $this->match($text, [
             '/(?:se\s+establece\s+diagn[oó]stico(?:\s+presuntivo)?\s+de|se\s+diagnostic[oó](?:\s+con)?|diagn[oó]stico\s+presuntivo\s+de)\s+(.+?)(?=,?\s*recomend[aá]ndose|\.(?:\s|$)|\n\n|$)/isu',
+            '/diagn[oó]stico\s*[:\-]\s*(.+?)(?=\.(?:\s|$)|\n\n|$)/isu',
             '/compatibles?\s+con\s+(.+?)(?=,?\s*(?:limitando|recomend[aá]ndose)|\.|\n\n|$)/isu',
         ]);
     }
@@ -158,7 +160,7 @@ class MedicalTextExtractionService
 
     private function extractDays(string $text): ?int
     {
-        if (! preg_match('/(?:se\s+extiende\s+incapacidad(?:\s+m[eé]dica)?\s+por|incapacidad\s+m[eé]dica\s+por|se\s+otorgan|reposo\s+por)\s+([\p{L}]+|\d+)\s*(?:\((\d+)\))?\s+d[ií]as/iu', $text, $matches)) {
+        if (! preg_match('/(?:se\s+extiende\s+incapacidad(?:\s+m[eé]dica)?\s+por|incapacidad\s+m[eé]dica\s+por|se\s+otorgan|reposo\s+por)\s+([\p{L}]+|\d+)\s*(?:\((\d+)\))?\s+d[ií]a(?:s)?/iu', $text, $matches)) {
             return null;
         }
         if (! empty($matches[2])) {
@@ -172,6 +174,12 @@ class MedicalTextExtractionService
     private function extractPeriod(string $text, ?string $consultationDate): array
     {
         $year = $consultationDate ? (int) substr($consultationDate, 0, 4) : (int) now(config('institution.timezone'))->year;
+        if (preg_match('/correspondiente\s+al\s+(\d{1,2})\s+de\s+([\p{L}]+)(?:\s+de\s+(\d{4}))?/iu', $text, $parts)) {
+            $year = ! empty($parts[3]) ? (int) $parts[3] : $year;
+            $date = $this->fromParts((int) $parts[1], $parts[2], $year);
+
+            return [$date, $date];
+        }
         if (preg_match('/(?:correspondientes\s+al|del)\s+(\d{1,2})\s+(?:y|al)\s+(\d{1,2})\s+de\s+([\p{L}]+)(?:\s+de\s+(\d{4}))?/iu', $text, $parts)) {
             $year = ! empty($parts[4]) ? (int) $parts[4] : $year;
 
@@ -217,7 +225,7 @@ class MedicalTextExtractionService
 
     private function consultationPrefix(): string
     {
-        return '(?:acudi[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el(?:\s+d[ií]a)?|se\s+present[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el(?:\s+d[ií]a)?|fue\s+atendid[oa]\s+el|consulta\s+realizada\s+el)';
+        return '(?:acudi[oó]\s+(?:para\s+)?(?:valoraci[oó]n\s+m[eé]dica|a\s+consulta(?:\s+m[eé]dica)?)\s+el(?:\s+d[ií]a)?|se\s+present[oó]\s+a\s+consulta(?:\s+m[eé]dica)?\s+el(?:\s+d[ií]a)?|fue\s+atendid[oa](?:\s+en\s+consulta(?:\s+m[eé]dica)?)?\s+el|consulta\s+realizada\s+el)';
     }
 
     private function date(?string $value): ?string

@@ -20,7 +20,7 @@ const selectDocument=(event:Event)=>extract.document=(event.target as HTMLInputE
     <section class="admin-content signature-settings">
       <header class="signature-hero">
         <div><p class="kicker">Activos visuales privados</p><h2>Firma y sello institucional</h2><p>Los archivos permanecen en almacenamiento privado y solo se muestran a usuarios autorizados. Una marca visual no equivale a una firma criptográfica.</p></div>
-        <form method="post" :action="route('admin.settings.signature.import-combined')"><input type="hidden" name="_token" :value="$page.props.csrf_token"><button class="button button--admin" type="submit">Importar firma + sello inicial</button></form>
+        <form method="post" :action="route('admin.settings.signature.import-combined')"><input type="hidden" name="_token" :value="$page.props.csrf_token"><button class="button button--admin" type="submit">IMPORTAR FIRMA + SELLO DESDE DOCS</button></form>
       </header>
 
       <div v-if="activeCombined" class="combined-notice" role="status"><img :src="activeCombined.preview_url" alt="Vista previa de firma y sello combinados"><div><strong>Activo combinado en uso</strong><p>Al emitir documentos generados, esta marca tiene prioridad sobre la firma y el sello por separado.</p></div></div>

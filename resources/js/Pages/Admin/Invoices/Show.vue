@@ -227,14 +227,16 @@ const voidInvoice = async () => {
                         autorización elegida. No puede revertirse.
                     </p>
                 </div>
-                <button
-                    v-if="canIssue"
-                    class="button button--admin"
-                    :disabled="!available.length"
-                    @click="issueOpen = true"
-                >
-                    Confirmar emisión</button
-                ><span v-else>No tiene permiso para emitir.</span>
+                <template v-if="canIssue">
+                    <button
+                        class="button button--admin"
+                        :disabled="!available.length"
+                        @click="issueOpen = true"
+                    >
+                        Confirmar emisión</button
+                    ><div v-if="!available.length" class="fiscal-guidance"><strong>Falta autorización fiscal activa</strong><p>Registre CAI, RTN y rango NCF vigente antes de emitir. El borrador permanece guardado y no consume NCF.</p><Link class="row-action" :href="route('admin.fiscal-authorizations.index')">Configurar autorización fiscal</Link></div>
+                </template>
+                <span v-else>No tiene permiso para emitir.</span>
             </div>
             <div
                 v-if="invoice.status === 'ISSUED'"

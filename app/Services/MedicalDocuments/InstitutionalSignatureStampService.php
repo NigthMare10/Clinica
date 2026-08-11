@@ -56,7 +56,13 @@ class InstitutionalSignatureStampService
         }
         $pdf->Output('F', $output);
 
-        return collect($kinds)->mapWithKeys(fn (string $kind) => [$kind => $assets->get($kind)->sha256])->all();
+        return collect($kinds)
+            ->mapWithKeys(function (string $kind) use ($assets): array {
+                $asset = $assets->get($kind);
+
+                return $asset ? [$kind => $asset->sha256] : [];
+            })
+            ->all();
     }
 
     /** @param Collection<string, InstitutionalAsset> $assets */

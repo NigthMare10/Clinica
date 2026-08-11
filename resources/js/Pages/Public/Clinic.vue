@@ -88,9 +88,8 @@ useScrollReveal();
                         digitalmente.
                     </p>
                     <p>
-                        <strong>Dirección principal:</strong><br />Entrada
-                        Principal colonia Torocagua, Frente a supermercado La
-                        Colonia, Comayagüela M.D.C., Honduras C.A.
+                        <strong>Cobertura nacional:</strong><br />Presencia
+                        institucional en los 18 departamentos de Honduras.
                     </p>
                     <Link
                         class="button button--primary"

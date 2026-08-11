@@ -15,7 +15,7 @@ class PdfTemplateRenderService
     {
         $pdf = new Fpdi('P', 'mm', 'Letter');
         $pdf->SetAutoPageBreak(false);
-        $this->addPage($pdf);
+        $this->addPage($pdf, $clinic);
 
         $patientName = trim($patient->first_name.' '.$patient->last_name);
         $age = $fields['age_at_consultation'] ?? $patient->age;
@@ -40,7 +40,7 @@ class PdfTemplateRenderService
         $pdf->Output('F', $output);
     }
 
-    private function addPage(Fpdi $pdf): void
+    private function addPage(Fpdi $pdf, Clinic $clinic): void
     {
         $pdf->AddPage();
         $pdf->SetMargins(23, 12, 23);
@@ -67,7 +67,7 @@ class PdfTemplateRenderService
         $pdf->Cell(0, 4, $this->text(config('institution.provider.credential_type').': '.config('institution.provider.credential_number')), 0, 1);
         $pdf->SetX(43);
         $pdf->SetFont('Helvetica', '', 7.2);
-        $address = implode(', ', array_map(fn (string $line) => rtrim(trim($line), ','), explode("\n", config('institution.address'))));
+        $address = implode(', ', array_map(fn (string $line) => rtrim(trim($line), ','), explode("\n", $clinic->address ?: config('institution.address'))));
         $pdf->MultiCell(145, 3.4, $this->text($address), 0, 'L');
         $pdf->SetX(43);
         $pdf->SetFont('Helvetica', '', 7.4);
@@ -131,22 +131,23 @@ class PdfTemplateRenderService
 
     private function signatureArea(Fpdi $pdf): void
     {
-        $pdf->SetY(194);
+        // Keep short narratives compact while reserving a safe separation after longer text.
+        $pdf->SetY(max(164, min(194, $pdf->GetY() + 12)));
 
         $pdf->SetTextColor(28, 45, 57);
         $pdf->SetFont('Helvetica', '', 10.5);
         $pdf->Cell(0, 6, $this->text('Atentamente.'), 0, 1);
-        $pdf->Ln(12);
-        $pdf->SetDrawColor(10, 45, 76);
-        $pdf->Line(28, $pdf->GetY(), 118, $pdf->GetY());
-        $pdf->Ln(3);
+        $pdf->Ln(5);
         $pdf->SetFont('Helvetica', 'B', 10);
         $pdf->Cell(100, 5, $this->text(config('institution.provider.name')), 0, 1, 'C');
         $pdf->SetFont('Helvetica', '', 8.5);
         $pdf->Cell(100, 5, $this->text(config('institution.provider.credential_type').': '.config('institution.provider.credential_number')), 0, 1, 'C');
+        $pdf->SetXY(28, 248);
+        $pdf->SetDrawColor(10, 45, 76);
+        $pdf->Line(38, 248, 118, 248);
+        $pdf->SetXY(28, 244);
         $pdf->SetFont('Helvetica', '', 7.5);
-        $pdf->SetTextColor(92, 108, 119);
-        $pdf->Cell(100, 4, $this->text('Área de firma electrónica'), 0, 1, 'C');
+        $pdf->Cell(10, 4, '(F)');
 
         $pdf->SetXY(142, 256);
         $pdf->SetTextColor(10, 45, 76);

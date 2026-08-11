@@ -50,7 +50,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <main id="contenido"><slot /></main>
         <footer class="public-footer">
             <div class="container footer-grid">
-                <div><BrandMark light /><p>Atención médica 24/7 con rigor institucional, trato humano y procesos verificables.</p><p>{{ institution.address }}</p><a :href="institution.phone_uri">{{ institution.phone }}</a></div>
+                <div><BrandMark light /><p>Atención médica 24/7 con rigor institucional, trato humano y procesos verificables.</p><p>Presencia nacional en los 18 departamentos de Honduras.</p><a :href="institution.phone_uri">{{ institution.phone }}</a></div>
                 <div><strong>Institucional</strong><Link :href="route('public.specialties.index')">Especialidades</Link><Link :href="route('public.clinic')">La clínica</Link><Link :href="route('public.clinics.index')">Cobertura</Link></div>
                 <div><strong>Accesos</strong><Link :href="route('public.contact')">Contacto</Link><Link :href="route('public.verify.lookup')">Verificar documento</Link><Link :href="route('login')">Acceso profesional</Link></div>
             </div>

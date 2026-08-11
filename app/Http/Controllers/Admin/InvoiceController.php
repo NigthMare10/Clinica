@@ -18,6 +18,7 @@ use App\Services\Fiscal\InvoiceIssueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -78,7 +79,9 @@ class InvoiceController extends Controller
 
         return Inertia::render('Admin/Invoices/Show', [
             'invoice' => $invoice->load(['items', 'authorization', 'audits.user:id,name', 'patient:id,first_name,last_name', 'clinic:id,name', 'medicalDocument:id,public_code,status'])->makeVisible('recipient_tax_id'),
-            'authorizations' => FiscalAuthorization::query()->where('clinic_id', $invoice->clinic_id)->latest()->get(['id', 'ncf_prefix', 'next_number', 'range_end', 'valid_from', 'valid_until', 'status', 'is_active']),
+            'authorizations' => FiscalAuthorization::query()
+                ->whereHas('clinic', fn ($query) => $query->where('code', config('fiscal_reference.reference_invoice_import.central_clinic_code')))
+                ->latest()->get(['id', 'ncf_prefix', 'next_number', 'range_end', 'valid_from', 'valid_until', 'status', 'is_active']),
             'canIssue' => $request->user()->can('issue', $invoice),
             'canVoid' => $request->user()->can('void', $invoice),
         ]);
@@ -99,15 +102,24 @@ class InvoiceController extends Controller
         abort_unless(is_string($path) && str_starts_with($path, 'fiscal/invoices/') && ! str_contains($path, '..'), 404);
         $disk = Storage::disk(config('invoice_pdf.disk'));
         abort_unless($disk->exists($path), 404);
+        $invoice->loadMissing('patient');
         InvoiceAudit::create([
             'invoice_id' => $invoice->id, 'user_id' => $request->user()->id, 'action' => 'PDF_DOWNLOADED',
             'payload' => ['issued_hash' => $invoice->issued_hash], 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
         ]);
 
-        return $disk->download($path, 'factura-'.$invoice->ncf.'.pdf', [
+        $recipient = $invoice->patient ? trim($invoice->patient->first_name.' '.$invoice->patient->last_name) : ($invoice->recipient_name ?: 'Consumidor_Final');
+        $date = ($invoice->issued_at ?? $invoice->created_at)->format('Y-m-d');
+
+        return $disk->download($path, 'Factura_'.$this->filenamePart($recipient).'_'.$date.'.pdf', [
             'Content-Type' => 'application/pdf', 'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'no-store, private, max-age=0', 'Pragma' => 'no-cache', 'Expires' => '0',
         ]);
+    }
+
+    private function filenamePart(string $value): string
+    {
+        return trim((string) preg_replace('/[^A-Za-z0-9]+/', '_', Str::ascii($value)), '_') ?: 'Consumidor_Final';
     }
 
     public function void(VoidInvoiceRequest $request, Invoice $invoice, InvoiceIssueService $service): JsonResponse

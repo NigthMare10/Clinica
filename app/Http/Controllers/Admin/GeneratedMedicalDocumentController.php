@@ -31,7 +31,7 @@ class GeneratedMedicalDocumentController extends Controller
 
         $clinics = Clinic::where('status', 'ACTIVE')
             ->when(! request()->user()->hasAnyRole(UserRole::SUPER_ADMIN), fn ($query) => $query->whereIn('id', request()->user()->accessibleClinicIds()))
-            ->orderByRaw("CASE WHEN code = 'HN-08' THEN 0 ELSE 1 END")->orderBy('sort_order')->get(['id', 'name', 'department', 'status']);
+            ->orderByRaw("CASE WHEN code = 'HN-08' THEN 0 ELSE 1 END")->orderBy('sort_order')->get(['id', 'name', 'department', 'address', 'status']);
         $clinic = $clinics->first();
         $profile = $clinic ? BillingProfile::query()->with('service:id,code,name,default_price,tax_type,is_active')
             ->where('clinic_id', $clinic->id)->where('certificate_kind', strtoupper($kind))->where('is_active', true)
@@ -43,6 +43,7 @@ class GeneratedMedicalDocumentController extends Controller
                 ->makeVisible('document_number'),
             'provider' => config('institution.provider'),
             'clinic' => $clinic,
+            'clinics' => $clinics,
             'canIssue' => request()->user()->hasAnyRole(UserRole::SUPER_ADMIN, UserRole::ADMINISTRATOR)
                 || (request()->user()->role === UserRole::DOCTOR && request()->user()->doctor?->credential_number === config('institution.provider.credential_number')),
             'quickBilling' => $profile && request()->user()->can('create', Invoice::class) ? [
@@ -112,7 +113,7 @@ class GeneratedMedicalDocumentController extends Controller
                 $result = $quickBilling->issue($document, $profile, $request->user());
 
                 return redirect()->route('admin.documents.review', $result['document'])
-                    ->with('status', 'Documento y factura emitidos. Ambos PDF quedaron vinculados y disponibles para descarga.');
+                    ->with('status', 'Documento emitido y borrador de factura creado. No se consumió NCF.');
             }
             $document->forceFill([
                 'inconsistencies' => [],

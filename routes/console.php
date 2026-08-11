@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\BillingProfile;
+use App\Models\BillingService;
+use App\Models\Clinic;
 use App\Models\DocumentVerificationLog;
 use App\Models\DocumentVersion;
 use App\Models\Invoice;
@@ -7,9 +10,12 @@ use App\Models\InvoiceAudit;
 use App\Models\InvoiceItem;
 use App\Models\MedicalDocument;
 use App\Models\Patient;
+use App\Models\User;
 use App\Services\Fiscal\ImportReferenceInvoiceAuthorization;
+use App\Services\MedicalDocuments\InstitutionalAssetService;
 use App\Services\MedicalDocuments\PdfToolAvailabilityService;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Symfony\Component\Process\Process;
 
@@ -23,6 +29,54 @@ Artisan::command('fiscal:import-reference-invoice {--clinic=HN-08 : Target clini
 
     return 0;
 })->purpose('Idempotently import the reference invoice fiscal authorization');
+
+Artisan::command('clinic:import-fiscal-reference {--clinic=HN-08 : Target clinic code}', function (ImportReferenceInvoiceAuthorization $importer): int {
+    $authorization = $importer->import((string) $this->option('clinic'));
+    $this->info('EXISTS/UPDATED: '.$authorization->rangeStartNcf().' to '.$authorization->rangeEndNcf().' | Next: '.$authorization->formatNcf($authorization->next_number));
+
+    return 0;
+})->purpose('Idempotently import Clínica Santa Ana fiscal reference data');
+
+Artisan::command('clinic:import-signature-stamp', function (InstitutionalAssetService $assets): int {
+    $source = base_path('docs/SantaAna_Firma_Sello/firma_sello_combinado_transparente.png');
+    if (! is_file($source)) {
+        $this->error('MISSING: authorized transparent signature-stamp source is unavailable.');
+
+        return 1;
+    }
+    $user = User::query()->whereIn('role', ['SUPER_ADMIN', 'ADMINISTRATOR'])->first();
+    if (! $user) {
+        $this->error('MISSING: an administrator is required to audit this import.');
+
+        return 1;
+    }
+    $asset = $assets->store(new UploadedFile($source, basename($source), 'image/png', null, true), InstitutionalAssetService::SIGNATURE_STAMP_COMBINED, $user, true);
+    $this->info('IMPORTED: '.$asset->id.' (active combined signature and stamp).');
+
+    return 0;
+})->purpose('Import the authorized transparent signature and stamp from docs into private storage');
+
+Artisan::command('clinic:configure-billing-profiles {--clinic=HN-08 : Target clinic code}', function (): int {
+    $clinic = Clinic::query()->where('code', (string) $this->option('clinic'))->first();
+    if (! $clinic) {
+        $this->error('MISSING: target clinic does not exist.');
+
+        return 1;
+    }
+    $service = BillingService::query()->updateOrCreate(['code' => 'CONSULTA_MEDICA'], [
+        'name' => 'Consulta médica', 'description' => 'Precio QA configurable desde administración.',
+        'default_price' => 1200, 'tax_type' => 'EXENTO', 'is_active' => true,
+    ]);
+    foreach (['CONSTANCIA', 'INCAPACIDAD', 'CONSULTA_MEDICA'] as $kind) {
+        BillingProfile::query()->updateOrCreate(['clinic_id' => $clinic->id, 'certificate_kind' => $kind], [
+            'billing_service_id' => $service->id, 'default_quantity' => 1, 'price_override' => 1200,
+            'tax_category' => 'EXENTO', 'default_payment_method' => 'EFECTIVO', 'is_active' => true,
+        ]);
+    }
+    $this->info('UPDATED: CONSTANCIA_MEDICA, INCAPACIDAD_MEDICA and CONSULTA_MEDICA billing profiles.');
+
+    return 0;
+})->purpose('Create/update configurable Clínica Santa Ana quick billing profiles');
 
 Artisan::command('clinic:document-tools', function (PdfToolAvailabilityService $tools): int {
     foreach ($tools->report() as $tool => $report) {

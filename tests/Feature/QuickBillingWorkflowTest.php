@@ -30,7 +30,7 @@ class QuickBillingWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_quick_billing_issues_invoice_before_medical_document_and_links_both_downloads(): void
+    public function test_quick_billing_creates_a_linked_draft_without_consuming_an_ncf(): void
     {
         Storage::fake('local');
         config(['invoice_pdf.disk' => 'local', 'medical_documents.disk' => 'local']);
@@ -38,14 +38,7 @@ class QuickBillingWorkflowTest extends TestCase
         $order = [];
 
         $invoiceIssuer = Mockery::mock(InvoiceIssueService::class);
-        $invoiceIssuer->shouldReceive('issue')->once()->andReturnUsing(function (Invoice $invoice) use (&$order): array {
-            $order[] = 'invoice';
-            $path = 'fiscal/invoices/'.$invoice->id.'.pdf';
-            Storage::disk('local')->put($path, 'invoice');
-            $invoice->forceFill(['status' => InvoiceStatus::ISSUED, 'ncf' => 'B010001', 'issued_path' => $path, 'issued_at' => now()])->save();
-
-            return ['invoice' => $invoice, 'qr_token' => 'token'];
-        });
+        $invoiceIssuer->shouldReceive('issue')->never();
         $medicalIssuer = Mockery::mock(MedicalDocumentIssueService::class);
         $medicalIssuer->shouldReceive('issue')->once()->andReturnUsing(function (MedicalDocument $medical) use (&$order): MedicalDocument {
             $order[] = 'medical';
@@ -56,20 +49,19 @@ class QuickBillingWorkflowTest extends TestCase
             return $medical;
         });
 
-        $result = $this->coordinator($invoiceIssuer, $medicalIssuer)->issue($document, $profile, $user);
+        $result = $this->coordinator($medicalIssuer)->issue($document, $profile, $user);
 
-        $this->assertSame(['invoice', 'medical'], $order);
+        $this->assertSame(['medical'], $order);
         $this->assertSame($result['document']->id, $result['invoice']->medical_document_id);
-        $this->assertSame(InvoiceStatus::ISSUED, $result['invoice']->status);
+        $this->assertSame(InvoiceStatus::DRAFT, $result['invoice']->status);
         $this->assertSame(MedicalDocumentStatus::ISSUED, $result['document']->status);
-        Storage::disk('local')->assertExists($result['invoice']->getRawOriginal('issued_path'));
         Storage::disk('local')->assertExists($result['document']->getRawOriginal('issued_path'));
 
         $this->actingAs($user)->get(route('admin.documents.review', $result['document']))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('relatedInvoices.0.id', $result['invoice']->id)
-                ->where('relatedInvoices.0.download_url', route('admin.invoices.download', $result['invoice']))
-                ->where('hasIssuedInvoice', true));
+                ->where('relatedInvoices.0.download_url', null)
+                ->where('hasIssuedInvoice', false));
     }
 
     public function test_outer_failure_rolls_back_ncf_and_database_state_and_removes_both_artifacts(): void
@@ -86,7 +78,7 @@ class QuickBillingWorkflowTest extends TestCase
         $medicalPath = 'medical/issued/failing.pdf';
 
         $invoiceIssuer = Mockery::mock(InvoiceIssueService::class);
-        $invoiceIssuer->shouldReceive('issue')->once()->andReturnUsing(function (Invoice $invoice) use ($authorization, &$invoicePath): array {
+        $invoiceIssuer->shouldReceive('issue')->never()->andReturnUsing(function (Invoice $invoice) use ($authorization, &$invoicePath): array {
             $authorization->increment('next_number');
             $invoicePath = 'fiscal/invoices/'.$invoice->id.'.pdf';
             Storage::disk('local')->put($invoicePath, 'invoice');
@@ -102,7 +94,7 @@ class QuickBillingWorkflowTest extends TestCase
         });
 
         try {
-            $this->coordinator($invoiceIssuer, $medicalIssuer)->issue($document, $profile, $user);
+            $this->coordinator($medicalIssuer)->issue($document, $profile, $user);
             $this->fail('The coordinated operation must fail.');
         } catch (RuntimeException $exception) {
             $this->assertSame('medical failure', $exception->getMessage());
@@ -130,11 +122,10 @@ class QuickBillingWorkflowTest extends TestCase
                 ->missing('quickBilling.billing_service_id'));
     }
 
-    private function coordinator(InvoiceIssueService $invoiceIssuer, MedicalDocumentIssueService $medicalIssuer): QuickBillingCoordinator
+    private function coordinator(MedicalDocumentIssueService $medicalIssuer): QuickBillingCoordinator
     {
         return new QuickBillingCoordinator(
             app(InvoiceDraftService::class),
-            $invoiceIssuer,
             $medicalIssuer,
             app(MedicalDocumentAuditService::class),
         );

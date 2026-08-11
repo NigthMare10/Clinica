@@ -11,9 +11,9 @@ use Tests\TestCase;
 
 class PdfEncryptionServiceTest extends TestCase
 {
-    public function test_decryption_normalizes_object_streams_for_fpdi_without_exposing_password(): void
+    public function test_decryption_normalizes_object_streams_without_an_open_password(): void
     {
-        config(['medical_documents.password' => 'top-secret-password', 'medical_documents.process_timeout' => 1]);
+        config(['medical_documents.process_timeout' => 1]);
         $tools = Mockery::mock(PdfToolAvailabilityService::class);
         $tools->shouldReceive('path')->with('qpdf')->andReturn('qpdf');
         $process = Mockery::mock(Process::class);
@@ -40,10 +40,7 @@ class PdfEncryptionServiceTest extends TestCase
         $service->decrypt('input.pdf', 'output.pdf');
 
         $this->assertContains('--object-streams=disable', $service->command);
-        $this->assertStringNotContainsString('top-secret-password', implode(' ', $service->command));
-        $passwordArgument = collect($service->command)->first(fn (string $argument) => str_starts_with($argument, '--password-file='));
-        $this->assertIsString($passwordArgument);
-        $this->assertFileDoesNotExist(substr($passwordArgument, strlen('--password-file=')));
+        $this->assertNotContains('--password-file', $service->command);
     }
 
     public function test_encryption_password_never_appears_in_process_arguments_or_error(): void

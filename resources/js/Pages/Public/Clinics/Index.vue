@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import PageMeta from '@/Components/PageMeta.vue';
 import { useScrollReveal } from '@/Composables/useScrollReveal';
@@ -12,70 +12,17 @@ const mapReady = ref(false);
 const mapFailed = ref(false);
 const selectedClinic = ref<string | null>(null);
 const filtered = computed(() => props.clinics.filter((clinic) => clinic.department.toLocaleLowerCase('es').includes(query.value.toLocaleLowerCase('es'))));
-let mapInstance: import('leaflet').Map | undefined;
-const markers = new Map<string, import('leaflet').CircleMarker>();
-let disposeMap: (() => void) | undefined;
-let mapObserver: IntersectionObserver | undefined;
-let mapLoading: Promise<void> | undefined;
-let destroyed = false;
 
 useScrollReveal();
 const initializeMap = async () => {
-    if (mapLoading) return mapLoading;
-    mapLoading = (async () => {
-      if (!mapElement.value || destroyed) return;
-      try {
-        const [leaflet] = await Promise.all([
-            import('leaflet'),
-            import('leaflet/dist/leaflet.css'),
-        ]);
-        if (!mapElement.value || destroyed) return;
-        const map = leaflet.map(mapElement.value, { scrollWheelZoom: false, zoomSnap: 0.25, minZoom: 6.5 }).setView([14.75, -86.55], 7.25);
-        mapInstance = map;
-        let errors = 0;
-        const tiles = leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 18 });
-        tiles.on('tileload', () => { mapReady.value = true; mapFailed.value = false; });
-        tiles.on('tileerror', () => { errors += 1; if (errors >= 4 && !mapReady.value) mapFailed.value = true; });
-        tiles.addTo(map);
-        props.clinics.filter((clinic) => clinic.latitude !== null && clinic.longitude !== null && clinic.is_public && clinic.status === 'ACTIVE').forEach((clinic) => {
-            const popup = document.createElement('div');
-            const name = document.createElement('strong');
-            const department = document.createElement('span');
-            name.textContent = clinic.name;
-            department.textContent = clinic.department;
-            popup.append(name, document.createElement('br'), department);
-            const marker = leaflet.circleMarker([clinic.latitude as number, clinic.longitude as number], { radius: 9, weight: 3, color: '#ffffff', fillColor: '#0b789b', fillOpacity: 1 }).addTo(map).bindPopup(popup);
-            marker.on('click', () => { selectedClinic.value = clinic.id; });
-            markers.set(clinic.id, marker);
-        });
-        const bounds = props.clinics.filter((clinic) => clinic.latitude !== null && clinic.longitude !== null).map((clinic) => [clinic.latitude as number, clinic.longitude as number] as [number, number]);
-        if (bounds.length) map.fitBounds(bounds, { padding: [28, 28], maxZoom: 7.25 });
-        const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
-        resize.observe(mapElement.value);
-        const timeout = window.setTimeout(() => { map.invalidateSize(); if (!mapReady.value) mapFailed.value = true; }, 6000);
-        disposeMap = () => { window.clearTimeout(timeout); resize.disconnect(); map.remove(); };
-      } catch { mapFailed.value = true; }
-    })();
-    return mapLoading;
+    // The local Honduras map remains usable when third-party tiles are blocked.
+    mapFailed.value = true;
 };
-onMounted(() => {
-    if (!mapElement.value) return;
-    mapObserver = new IntersectionObserver(([entry]) => {
-        if (!entry?.isIntersecting) return;
-        mapObserver?.disconnect();
-        void initializeMap();
-    }, { rootMargin: '300px' });
-    mapObserver.observe(mapElement.value);
-});
-onUnmounted(() => { destroyed = true; mapObserver?.disconnect(); disposeMap?.(); });
+onMounted(() => { void initializeMap(); });
 const focusClinic = async (clinic: Clinic) => {
     if (clinic.latitude === null || clinic.longitude === null) return;
     selectedClinic.value = clinic.id;
     await initializeMap();
-    if (mapInstance) {
-        mapInstance.flyTo([clinic.latitude, clinic.longitude], 11, { duration: 1.2 });
-        markers.get(clinic.id)?.openPopup();
-    }
     mapElement.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 const pointStyle = (clinic: Clinic) => ({

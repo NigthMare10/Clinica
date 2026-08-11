@@ -12,16 +12,28 @@ class PdfEncryptionService
 
     public function decrypt(string $input, string $output): void
     {
-        $qpdf = $this->tools->path('qpdf') ?? throw new RuntimeException('qpdf is unavailable.');
-        $this->withPasswordFile(function (string $passwordFile) use ($qpdf, $input, $output): void {
-            $process = $this->process([$qpdf, '--password-file='.$passwordFile, '--decrypt', '--object-streams=disable', $input, $output]);
-            $this->run($process, 'PDF decryption failed.');
-        });
+        $qpdf = $this->tools->path('qpdf');
+        if ($qpdf) {
+            $this->run($this->process([$qpdf, '--decrypt', '--object-streams=disable', $input, $output]), 'PDF decryption failed.');
+
+            return;
+        }
+
+        $gs = $this->tools->path('gs') ?? throw new RuntimeException('qpdf y Ghostscript no están disponibles.');
+        $this->run($this->process([
+            $gs, '-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=pdfwrite',
+            '-sPDFPassword=', '-sOutputFile='.$output, $input,
+        ]), 'PDF decryption failed.');
     }
 
     public function encrypt(string $input, string $output): void
     {
-        $qpdf = $this->tools->path('qpdf') ?? throw new RuntimeException('qpdf is unavailable.');
+        $qpdf = $this->tools->path('qpdf');
+        if (! $qpdf) {
+            $this->encryptWithGhostscript($input, $output);
+
+            return;
+        }
         $this->withArgumentFile($input, $output, function (string $argumentFile) use ($qpdf): void {
             $process = $this->process([$qpdf, '@'.$argumentFile]);
             $this->run($process, 'PDF encryption failed.');
@@ -30,7 +42,14 @@ class PdfEncryptionService
 
     public function assertEncrypted(string $path): void
     {
-        $qpdf = $this->tools->path('qpdf') ?? throw new RuntimeException('qpdf is unavailable.');
+        $qpdf = $this->tools->path('qpdf');
+        if (! $qpdf) {
+            if (! str_contains((string) file_get_contents($path), '/Encrypt')) {
+                throw new RuntimeException('El PDF final no quedó cifrado.');
+            }
+
+            return;
+        }
         $process = $this->process([$qpdf, '--is-encrypted', $path]);
         $process->setTimeout(config('medical_documents.process_timeout'))->disableOutput()->run();
         if ($process->getExitCode() !== 0) {
@@ -53,7 +72,32 @@ class PdfEncryptionService
 
     protected function process(array $command): Process
     {
-        return new Process($command, null, array_merge(getenv(), ['QPDF_CRYPTO_PROVIDER' => 'native']));
+        $runtime = storage_path('runtime/process');
+        if (! is_dir($runtime)) {
+            mkdir($runtime, 0700, true);
+        }
+
+        return new Process($command, $runtime, array_merge(getenv(), [
+            'QPDF_CRYPTO_PROVIDER' => 'native',
+            'TMPDIR' => storage_path('runtime/tmp'),
+        ]));
+    }
+
+    private function encryptWithGhostscript(string $input, string $output): void
+    {
+        $gs = $this->tools->path('gs') ?? throw new RuntimeException('qpdf y Ghostscript no están disponibles.');
+        $password = (string) config('medical_documents.password');
+        if ($password === '') {
+            throw new RuntimeException('PDF password is not configured.');
+        }
+        $ownerPassword = hash_hmac('sha256', $password, (string) config('app.key'));
+        $this->run($this->process([
+            $gs,
+            '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=pdfwrite',
+            '-dCompatibilityLevel=1.7', '-dEncryptionR=3', '-dKeyLength=128', '-dPermissions=4',
+            '-sUserPassword=', '-sOwnerPassword='.$ownerPassword,
+            '-sOutputFile='.$output, $input,
+        ]), 'PDF encryption failed.');
     }
 
     private function withPasswordFile(callable $callback): void
@@ -90,7 +134,8 @@ class PdfEncryptionService
         $ownerPassword = hash_hmac('sha256', $password, (string) config('app.key'));
         $arguments = implode("\n", [
             '--encrypt',
-            '--user-password='.$password,
+            // The recipient may open and print; the configured secret only protects owner permissions.
+            '--user-password=',
             '--owner-password='.$ownerPassword,
             '--bits=256',
             '--modify=none',
@@ -98,6 +143,7 @@ class PdfEncryptionService
             '--annotate=n',
             '--form=n',
             '--assemble=n',
+            '--print=full',
             '--',
             $input,
             $output,

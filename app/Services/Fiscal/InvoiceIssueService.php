@@ -5,6 +5,7 @@ namespace App\Services\Fiscal;
 use App\Enums\FiscalAuthorizationStatus;
 use App\Enums\InvoiceStatus;
 use App\Models\FiscalAuthorization;
+use App\Models\Clinic;
 use App\Models\Invoice;
 use App\Models\InvoiceAudit;
 use App\Models\User;
@@ -27,7 +28,7 @@ class InvoiceIssueService
         $storedPath = null;
         try {
             return DB::transaction(function () use ($invoice, $issuer, $authorizationId, &$storedPath) {
-                $invoice = Invoice::query()->with(['items', 'clinic'])->lockForUpdate()->findOrFail($invoice->id);
+                $invoice = Invoice::query()->with(['items', 'clinic', 'patient', 'medicalDocument', 'createdBy'])->lockForUpdate()->findOrFail($invoice->id);
                 if ($invoice->status !== InvoiceStatus::DRAFT) {
                     throw new \DomainException('Only draft invoices can be issued.');
                 }
@@ -62,6 +63,8 @@ class InvoiceIssueService
                 $invoice->forceFill($totals + [
                     'fiscal_authorization_id' => $authorization->id,
                     'ncf' => $ncf,
+                    'order_number' => $invoice->order_number ?: $this->internalNumber('ORD'),
+                    'invoice_control_number' => $invoice->invoice_control_number ?: $this->internalNumber('C'),
                     'source_hash' => $sourceHash,
                     'issued_at' => $issuedAt,
                 ]);
@@ -110,9 +113,13 @@ class InvoiceIssueService
 
     private function lockedAuthorization(Invoice $invoice, ?string $authorizationId): FiscalAuthorization
     {
-        FiscalAuthorization::query()->where('clinic_id', $invoice->clinic_id)->where('status', FiscalAuthorizationStatus::ACTIVE)
+        $centralClinicId = Clinic::query()->where('code', config('fiscal_reference.reference_invoice_import.central_clinic_code'))->value('id');
+        if (! $centralClinicId) {
+            throw new \DomainException('The central fiscal clinic is not configured.');
+        }
+        FiscalAuthorization::query()->where('clinic_id', $centralClinicId)->where('status', FiscalAuthorizationStatus::ACTIVE)
             ->whereDate('valid_until', '<', today())->update(['status' => FiscalAuthorizationStatus::EXPIRED, 'is_active' => false]);
-        $query = FiscalAuthorization::query()->where('clinic_id', $invoice->clinic_id)->where('is_active', true)->where('status', FiscalAuthorizationStatus::ACTIVE)
+        $query = FiscalAuthorization::query()->where('clinic_id', $centralClinicId)->where('is_active', true)->where('status', FiscalAuthorizationStatus::ACTIVE)
             ->whereDate('valid_from', '<=', today())->whereDate('valid_until', '>=', today())->lockForUpdate();
         $authorization = $authorizationId ? $query->whereKey($authorizationId)->first() : $query->orderBy('valid_until')->orderBy('id')->first();
         if (! $authorization) {
@@ -124,7 +131,14 @@ class InvoiceIssueService
 
     private function canonicalSource(Invoice $invoice): string
     {
-        return $this->canonicalJson(['clinic_id' => $invoice->clinic_id, 'patient_id' => $invoice->patient_id, 'medical_document_id' => $invoice->medical_document_id, 'recipient_name' => $invoice->recipient_name, 'recipient_tax_id' => $invoice->recipient_tax_id, 'items' => $invoice->items->map(fn ($item) => ['position' => $item->position, 'description' => $item->description, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'discount' => $item->discount, 'tax_category' => $item->tax_category->value])->all()]);
+        return $this->canonicalJson(['clinic_id' => $invoice->clinic_id, 'patient_id' => $invoice->patient_id, 'medical_document_id' => $invoice->medical_document_id, 'recipient_name' => $invoice->recipient_name, 'recipient_tax_id' => $invoice->recipient_tax_id, 'payment_method' => $invoice->payment_method, 'paid_total' => $invoice->paid_total, 'balance' => $invoice->balance, 'items' => $invoice->items->map(fn ($item) => ['position' => $item->position, 'description' => $item->description, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'discount' => $item->discount, 'tax_category' => $item->tax_category->value])->all()]);
+    }
+
+    private function internalNumber(string $prefix): string
+    {
+        return $prefix === 'C'
+            ? 'C-'.random_int(100000000, 999999999)
+            : (string) random_int(1000000000, 9999999999);
     }
 
     private function canonicalJson(array $data): string

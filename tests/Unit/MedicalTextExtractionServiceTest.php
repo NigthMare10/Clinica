@@ -7,6 +7,15 @@ use PHPUnit\Framework\TestCase;
 
 class MedicalTextExtractionServiceTest extends TestCase
 {
+    public function test_it_extracts_an_explicit_production_qa_patient_name(): void
+    {
+        $analysis = (new MedicalTextExtractionService)->extract(
+            'Se hace constar que el paciente PRODUCTION QA 01, de 31 años de edad, con número de identidad 0000-0000-00001, acudió a consulta médica el día 11 de agosto de 2026 a las 2:00 p. m. Diagnóstico: síndrome viral agudo.',
+        );
+
+        $this->assertSame('PRODUCTION QA 01', $analysis['fields']['patient_name']);
+    }
+
     public function test_it_extracts_the_genesis_regression_fixture(): void
     {
         $text = file_get_contents(__DIR__.'/../Fixtures/genesis-medical-text.txt');

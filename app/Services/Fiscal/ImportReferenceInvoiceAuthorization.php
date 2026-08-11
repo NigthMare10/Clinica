@@ -5,6 +5,7 @@ namespace App\Services\Fiscal;
 use App\Enums\FiscalAuthorizationStatus;
 use App\Models\Clinic;
 use App\Models\FiscalAuthorization;
+use App\Models\Invoice;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -59,11 +60,20 @@ class ImportReferenceInvoiceAuthorization
                 return $authorization->refresh();
             }
 
+            $lastIssued = Invoice::query()
+                ->where('clinic_id', $clinic->id)
+                ->whereNotNull('ncf')
+                ->where('ncf', 'like', $reference['ncf_prefix'].'%')
+                ->pluck('ncf')
+                ->map(fn (string $ncf) => (int) substr($ncf, -$reference['number_padding']))
+                ->filter(fn (int $sequence) => $sequence >= $reference['sequence_start'] && $sequence <= $reference['sequence_end'])
+                ->max();
+
             return FiscalAuthorization::create($values + [
                 'clinic_id' => $clinic->id,
                 'cai' => $reference['cai'],
                 'rtn' => $reference['rtn'],
-                'next_number' => $reference['sequence_start'],
+                'next_number' => $lastIssued ? $lastIssued + 1 : $reference['sequence_start'],
                 'valid_from' => today(),
                 'status' => FiscalAuthorizationStatus::ACTIVE,
                 'is_active' => true,

@@ -67,6 +67,7 @@ class InvoiceIssueServiceTest extends TestCase
     {
         $user = User::factory()->create(['role' => UserRole::ADMINISTRATOR]);
         $clinic = Clinic::create(['code' => 'TEST', 'slug' => 'test', 'name' => 'Test clinic', 'department' => 'Test']);
+        config(['fiscal_reference.reference_invoice_import.central_clinic_code' => $clinic->code]);
 
         return [$user, $clinic];
     }

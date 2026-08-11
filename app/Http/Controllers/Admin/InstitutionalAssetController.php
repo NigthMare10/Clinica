@@ -116,7 +116,7 @@ class InstitutionalAssetController extends Controller
         $asset = $assets->store($file, InstitutionalAssetService::SIGNATURE_STAMP_COMBINED, $request->user());
         $this->audit($asset, 'SIGNATURE_STAMP_COMBINED_IMPORTED', $request, ['source' => 'docs/SantaAna_Firma_Sello']);
 
-        return back()->with('status', 'SIGNATURE_STAMP_COMBINED_IMPORTED: activo combinado privado guardado.');
+        return redirect()->route('admin.settings.signature.index')->with('status', 'Firma y sello importados correctamente.');
     }
 
     private function audit(InstitutionalAsset $asset, string $action, Request $request, array $metadata = []): void

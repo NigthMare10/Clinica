@@ -13,7 +13,7 @@ class Invoice extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['clinic_id', 'fiscal_authorization_id', 'patient_id', 'medical_document_id', 'recipient_name', 'recipient_tax_id', 'payment_method', 'paid_total', 'balance', 'created_by'];
+    protected $fillable = ['clinic_id', 'fiscal_authorization_id', 'patient_id', 'medical_document_id', 'recipient_name', 'recipient_tax_id', 'payment_method', 'paid_total', 'balance', 'order_number', 'invoice_control_number', 'created_by'];
 
     protected $hidden = ['qr_token_hash', 'recipient_tax_id', 'issued_path'];
 
@@ -85,5 +85,10 @@ class Invoice extends Model
     public function audits()
     {
         return $this->hasMany(InvoiceAudit::class);
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }
