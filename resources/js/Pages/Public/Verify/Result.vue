@@ -422,10 +422,7 @@ const verifyDetails = () => {
                                 <p class="institution-address">
                                     {{ document.clinic.address }}
                                 </p>
-                                <a
-                                    :href="`tel:${document.clinic.phone.replace(/[^+\d]/g, '')}`"
-                                    >{{ document.clinic.phone }}</a
-                                ><strong>{{ document.clinic.hours }}</strong>
+                                <strong>{{ document.clinic.hours }}</strong>
                             </section>
                             <section class="verification-section">
                                 <p class="kicker">Seguridad documental</p>
