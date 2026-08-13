@@ -48,6 +48,14 @@ class MedicalDocumentLifecycleSecurityTest extends TestCase
         $this->assertStringContainsString('private', $response->headers->get('Cache-Control'));
     }
 
+    public function test_shared_institution_props_never_expose_administrator_credentials(): void
+    {
+        config(['institution.admin.email' => 'admin@example.test', 'institution.admin.password' => 'secret-value']);
+
+        $this->get('/verificar')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->missing('institution.admin'));
+    }
+
     public function test_token_is_32_random_bytes_and_qr_url_contains_no_pii(): void
     {
         $qr = app(QrCodeService::class);
