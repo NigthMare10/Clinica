@@ -11,7 +11,6 @@ const navigation = [
     ['Especialidades', 'public.specialties.*', 'public.specialties.index'],
     ['La clinica', 'public.clinic', 'public.clinic'],
     ['Clinicas', 'public.clinics.*', 'public.clinics.index'],
-    ['Contacto', 'public.contact', 'public.contact'],
 ] as const;
 const active = (pattern: string) => Boolean(route().current(pattern));
 const close = () => { open.value = false; };
@@ -50,9 +49,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <main id="contenido"><slot /></main>
         <footer class="public-footer">
             <div class="container footer-grid">
-                <div><BrandMark light /><p>Atención médica 24/7 con rigor institucional, trato humano y procesos verificables.</p><p>Presencia nacional en los 18 departamentos de Honduras.</p><a :href="institution.phone_uri">{{ institution.phone }}</a></div>
+                <div><BrandMark light /><p>Atención médica 24/7 con rigor institucional, trato humano y procesos verificables.</p><p>Presencia nacional en los 18 departamentos de Honduras.</p></div>
                 <div><strong>Institucional</strong><Link :href="route('public.specialties.index')">Especialidades</Link><Link :href="route('public.clinic')">La clínica</Link><Link :href="route('public.clinics.index')">Cobertura</Link></div>
-                <div><strong>Accesos</strong><Link :href="route('public.contact')">Contacto</Link><Link :href="route('public.verify.lookup')">Verificar documento</Link><Link :href="route('login')">Acceso profesional</Link></div>
+                <div><strong>Accesos</strong><Link :href="route('public.verify.lookup')">Verificar documento</Link><Link :href="route('login')">Acceso profesional</Link></div>
             </div>
             <div class="container footer-base"><span>© {{ new Date().getFullYear() }} {{ institution.short_name }}</span><span>{{ institution.hours }} · 7 DÍAS DE LA SEMANA</span></div>
         </footer>

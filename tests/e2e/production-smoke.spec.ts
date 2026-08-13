@@ -50,7 +50,7 @@ productionOnly('production public and administrative routes remain functional', 
         if (response.status() >= 400) failures.push(`${response.status()} ${response.request().method()} ${response.url()}`);
     });
 
-    for (const route of ['/', '/especialidades', '/clinica', '/clinicas', '/contacto', '/verificar', '/login']) {
+    for (const route of ['/', '/especialidades', '/clinica', '/clinicas', '/verificar', '/login']) {
         const response = await page.goto(route);
         expect(response?.status(), route).toBe(200);
         await expect(page.locator('body')).not.toBeEmpty();

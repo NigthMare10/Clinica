@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fixture, signIn } from './fixtures';
 
 test('public routes and Spanish verification lookup are live', async ({ page }) => {
-    for (const url of ['/', '/especialidades', '/clinica', '/clinicas', '/contacto', '/verificar', '/login']) {
+    for (const url of ['/', '/especialidades', '/clinica', '/clinicas', '/verificar', '/login']) {
         const response = await page.goto(url);
         expect(response?.status(), url).toBeLessThan(400);
     }

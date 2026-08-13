@@ -27,7 +27,6 @@ Route::get('/especialidades', [PublicSiteController::class, 'specialties'])->nam
 Route::get('/especialidades/{specialty:slug}', [PublicSiteController::class, 'specialty'])->name('public.specialties.show');
 Route::get('/clinica', fn (PublicSiteController $controller) => $controller->page('clinica', 'Public/Clinic'))->name('public.clinic');
 Route::get('/clinicas', [PublicSiteController::class, 'clinics'])->name('public.clinics.index');
-Route::get('/contacto', fn (PublicSiteController $controller) => $controller->page('contacto', 'Public/Contact'))->name('public.contact');
 
 Route::middleware('noindex')->prefix('verificar')->name('public.verify.')->group(function () {
     Route::get('/', [PublicVerificationController::class, 'lookup'])->name('lookup');
