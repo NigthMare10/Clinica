@@ -23,7 +23,7 @@ class MedicalRevisionTimestampTest extends TestCase
             'status' => MedicalDocumentStatus::ISSUED,
             'public_code' => 'CSA-REVISION-TIME',
             'consultation_date' => '2026-08-10',
-            'consultation_time' => '23:30:00',
+            'consultation_time' => '23:30',
             'issued_at' => CarbonImmutable::parse('2026-08-10 23:40:00', 'America/Tegucigalpa'),
         ]);
 

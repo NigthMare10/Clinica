@@ -122,7 +122,7 @@ class MedicalTextExtractionService
             $hour = 0;
         }
 
-        return sprintf('%02d:%02d:00', $hour, $minutes);
+        return sprintf('%02d:%02d', $hour, $minutes);
     }
 
     private function extractClause(string $text, array $starts, array $ends): ?string

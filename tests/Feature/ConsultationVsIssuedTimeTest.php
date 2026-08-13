@@ -19,7 +19,7 @@ class ConsultationVsIssuedTimeTest extends TestCase
         $document = MedicalDocument::factory()->create([
             'status' => MedicalDocumentStatus::ISSUED,
             'consultation_date' => '2026-08-10',
-            'consultation_time' => '14:00:00',
+            'consultation_time' => '14:00',
             'issued_at' => $issuedAt,
             'public_code' => 'CSA-TIME-TEST',
         ]);

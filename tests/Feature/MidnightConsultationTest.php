@@ -11,6 +11,6 @@ class MidnightConsultationTest extends TestCase
     {
         $result = app(MedicalTextExtractionService::class)->extract('El paciente acudió a consulta a las 12:00 a. m.');
 
-        $this->assertSame('00:00:00', $result['fields']['consultation_time']);
+        $this->assertSame('00:00', $result['fields']['consultation_time']);
     }
 }
