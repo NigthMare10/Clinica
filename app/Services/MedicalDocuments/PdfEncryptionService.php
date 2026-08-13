@@ -86,57 +86,32 @@ class PdfEncryptionService
     private function encryptWithGhostscript(string $input, string $output): void
     {
         $gs = $this->tools->path('gs') ?? throw new RuntimeException('qpdf y Ghostscript no están disponibles.');
-        $password = (string) config('medical_documents.password');
+        $password = $this->ownerPassword();
         if ($password === '') {
             throw new RuntimeException('PDF password is not configured.');
         }
-        $ownerPassword = hash_hmac('sha256', $password, (string) config('app.key'));
         $this->run($this->process([
             $gs,
             '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=pdfwrite',
             '-dCompatibilityLevel=1.7', '-dEncryptionR=3', '-dKeyLength=128', '-dPermissions=4',
-            '-sUserPassword=', '-sOwnerPassword='.$ownerPassword,
+            '-sUserPassword=', '-sOwnerPassword='.$password,
             '-sOutputFile='.$output, $input,
         ]), 'PDF encryption failed.');
     }
 
-    private function withPasswordFile(callable $callback): void
-    {
-        $password = (string) config('medical_documents.password');
-        if ($password === '') {
-            throw new RuntimeException('PDF password is not configured.');
-        }
-
-        $path = tempnam(sys_get_temp_dir(), 'csa-pdf-');
-        if ($path === false || file_put_contents($path, $password) === false) {
-            throw new RuntimeException('Unable to prepare protected PDF processing.');
-        }
-        @chmod($path, 0600);
-
-        try {
-            $callback($path);
-        } finally {
-            if (is_file($path)) {
-                file_put_contents($path, str_repeat("\0", max(1, filesize($path) ?: 1)));
-                @unlink($path);
-            }
-        }
-    }
-
     private function withArgumentFile(string $input, string $output, callable $callback): void
     {
-        $password = (string) config('medical_documents.password');
+        $password = $this->ownerPassword();
         if ($password === '') {
             throw new RuntimeException('PDF password is not configured.');
         }
 
         $path = tempnam(sys_get_temp_dir(), 'csa-qpdf-args-');
-        $ownerPassword = hash_hmac('sha256', $password, (string) config('app.key'));
         $arguments = implode("\n", [
             '--encrypt',
             // The recipient may open and print; the configured secret only protects owner permissions.
             '--user-password=',
-            '--owner-password='.$ownerPassword,
+            '--owner-password='.$password,
             '--bits=256',
             '--modify=none',
             '--extract=n',
@@ -161,5 +136,10 @@ class PdfEncryptionService
                 @unlink($path);
             }
         }
+    }
+
+    private function ownerPassword(): string
+    {
+        return (string) config('medical_documents.pdf_password');
     }
 }

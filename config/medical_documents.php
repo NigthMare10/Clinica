@@ -3,8 +3,7 @@
 return [
     'disk' => env('MEDICAL_DOCUMENT_DISK', 'local'),
     'max_upload_kb' => (int) env('MEDICAL_PDF_MAX_KB', 15360),
-    // INSTITUTIONAL_PDF_PASSWORD is the preferred name; the legacy setting remains supported.
-    'password' => env('INSTITUTIONAL_PDF_PASSWORD', env('MEDICAL_PDF_PASSWORD', '')),
+    'pdf_password' => env('INSTITUTIONAL_PDF_PASSWORD'),
     'encryption_enabled' => filter_var(env('MEDICAL_PDF_ENCRYPTION', true), FILTER_VALIDATE_BOOL),
     'binaries' => [
         'pdftotext' => env('PDFTOTEXT_BINARY', 'pdftotext'),

@@ -10,7 +10,7 @@ export default async function globalSetup() {
     writeFileSync(database, '');
     const env = { ...process.env, APP_ENV: 'e2e', DB_CONNECTION: 'sqlite', DB_DATABASE: database,
         APP_URL: 'http://127.0.0.1:8017', QUEUE_CONNECTION: 'sync', CACHE_STORE: 'array', SESSION_DRIVER: 'database',
-        MEDICAL_PDF_PASSWORD: 'E2E-Pdf-Encryption-Only!', MEDICAL_PDF_ENCRYPTION: 'true' };
+        INSTITUTIONAL_PDF_PASSWORD: 'E2E-Pdf-Encryption-Only!', MEDICAL_PDF_ENCRYPTION: 'true' };
     execFileSync('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3', 'artisan', 'migrate:fresh',
         '--seed', '--seeder=Database\\Seeders\\E2ESeeder', '--force'], { cwd: root, env, stdio: 'inherit' });
 }

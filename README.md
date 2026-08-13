@@ -63,10 +63,10 @@ DB_PASSWORD=
 QUEUE_CONNECTION=database
 MEDICAL_OCR_LANGUAGES=spa+eng
 MEDICAL_PDF_ENCRYPTION=false
-MEDICAL_PDF_PASSWORD=
+INSTITUTIONAL_PDF_PASSWORD=
 ```
 
-Asigne `DB_PASSWORD` localmente; no publique el valor. Configure `MEDICAL_PDF_PASSWORD` mediante el entorno o gestor de secretos cuando los PDF de entrada esten protegidos, aunque `MEDICAL_PDF_ENCRYPTION=false`: esa bandera controla la proteccion de la copia final, no la apertura del original. Nunca coloque la clave en el repositorio, comandos compartidos, capturas ni documentacion.
+Asigne `DB_PASSWORD` localmente; no publique el valor. Configure `INSTITUTIONAL_PDF_PASSWORD` mediante el entorno o gestor de secretos para proteger los permisos de los PDF finales. Nunca coloque la clave en el repositorio, comandos compartidos, capturas ni documentacion.
 
 ### 3. Configurar el administrador inicial
 

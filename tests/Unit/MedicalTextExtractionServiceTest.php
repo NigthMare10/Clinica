@@ -26,7 +26,7 @@ class MedicalTextExtractionServiceTest extends TestCase
             'age' => 28,
             'identity' => '0801199812345',
             'consultation_date' => '2026-08-10',
-            'consultation_time' => '08:00',
+            'consultation_time' => '08:00:00',
             'diagnosis' => 'infección respiratoria aguda',
             'leave_days' => 2,
             'leave_start_date' => '2026-08-10',
@@ -56,7 +56,7 @@ TEXT;
         $this->assertSame(21, $fields['age']);
         $this->assertSame('0801200519904', $fields['identity']);
         $this->assertSame('2026-08-09', $fields['consultation_date']);
-        $this->assertSame('10:00', $fields['consultation_time']);
+        $this->assertSame('10:00:00', $fields['consultation_time']);
         $this->assertStringContainsString('diarrea frecuente', $fields['symptoms']);
         $this->assertSame('gastroenteritis aguda de probable origen infeccioso asociada a síndrome febril, mialgias y deshidratación leve', $fields['diagnosis']);
         $this->assertSame(2, $fields['leave_days']);
@@ -82,15 +82,15 @@ TEXT;
         $variants = [
             [
                 'El paciente Mario Suazo, 42 años, identidad 0501198412345, fue atendido el 3 de julio de 2026 a las 8:00 AM. Se diagnosticó bronquitis aguda. Reposo por 3 días, 3, 4 y 5 de julio de 2026.',
-                ['Mario Suazo', 42, '08:00', 'bronquitis aguda', 3, '2026-07-03', '2026-07-05'],
+                ['Mario Suazo', 42, '08:00:00', 'bronquitis aguda', 3, '2026-07-03', '2026-07-05'],
             ],
             [
                 'La paciente Lucía Pineda, de 35 años de edad, número de identidad 0801199111111, acudió a consulta el 14 de junio de 2026 a las 08:00. Hallazgos compatibles con migraña sin aura. Se otorgan dos días, del 14 al 15 de junio de 2026.',
-                ['Lucía Pineda', 35, '08:00', 'migraña sin aura', 2, '2026-06-14', '2026-06-15'],
+                ['Lucía Pineda', 35, '08:00:00', 'migraña sin aura', 2, '2026-06-14', '2026-06-15'],
             ],
             [
                 'El paciente Óscar Mejía, de 51 años, identidad 0101197512345, se presentó a consulta médica el día 20 de mayo de 2026 a las 8:00 a. m. Se establece diagnóstico presuntivo de lumbalgia mecánica. Se extiende incapacidad por tres (3) días, correspondientes al 20, 21 y 22 de mayo de 2026.',
-                ['Óscar Mejía', 51, '08:00', 'lumbalgia mecánica', 3, '2026-05-20', '2026-05-22'],
+                ['Óscar Mejía', 51, '08:00:00', 'lumbalgia mecánica', 3, '2026-05-20', '2026-05-22'],
             ],
         ];
 

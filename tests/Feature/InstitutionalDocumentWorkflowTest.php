@@ -76,7 +76,7 @@ class InstitutionalDocumentWorkflowTest extends TestCase
         config([
             'medical_documents.disk' => 'local',
             'medical_documents.encryption_enabled' => true,
-            'medical_documents.password' => 'Feature-Pdf-Encryption-Only!',
+            'medical_documents.pdf_password' => 'Feature-Pdf-Encryption-Only!',
         ]);
         $user = User::factory()->create(['role' => UserRole::SUPER_ADMIN]);
         $patient = Patient::factory()->create(['age' => 21]);

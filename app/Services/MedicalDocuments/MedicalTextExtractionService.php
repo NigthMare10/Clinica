@@ -104,20 +104,25 @@ class MedicalTextExtractionService
 
     private function extractTime(string $text): ?string
     {
-        $value = $this->match($text, ['/\b(?:a\s+las\s+)?(\d{1,2}:\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?|AM|PM)?/iu']);
-        if (! $value || ! preg_match('/(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?|AM|PM)?/iu', $text, $parts)) {
+        if (! preg_match('/\ba\s+las\s+(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?|AM|PM)?/iu', $text, $parts)) {
             return null;
         }
         $hour = (int) $parts[1];
         $minutes = (int) $parts[2];
+        if ($hour > 23 || $minutes > 59) {
+            return null;
+        }
         $period = strtolower((string) ($parts[3] ?? ''));
+        if ($period !== '' && ($hour < 1 || $hour > 12)) {
+            return null;
+        }
         if (str_contains($period, 'p') && $hour < 12) {
             $hour += 12;
         } elseif (str_contains($period, 'a') && $hour === 12) {
             $hour = 0;
         }
 
-        return sprintf('%02d:%02d', $hour, $minutes);
+        return sprintf('%02d:%02d:00', $hour, $minutes);
     }
 
     private function extractClause(string $text, array $starts, array $ends): ?string

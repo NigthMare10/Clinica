@@ -96,7 +96,7 @@ class MedicalDocumentIssueService
                     $snapshot['institutional_marks'] = $assetHashes;
                 }
                 $document->forceFill(['issued_path' => $path, 'issued_sha256' => $issuedHash,
-                    'issued_by' => $user->id, 'issued_at' => now(), 'status' => MedicalDocumentStatus::ISSUED,
+                    'issued_by' => $user->id, 'issued_at' => now(config('institution.timezone')), 'status' => MedicalDocumentStatus::ISSUED,
                     'template_snapshot' => $snapshot, 'is_current_revision' => true])->save();
                 if ($document->reissue_of_id) {
                     $source->forceFill([

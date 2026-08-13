@@ -45,7 +45,7 @@ class PdfEncryptionServiceTest extends TestCase
 
     public function test_encryption_password_never_appears_in_process_arguments_or_error(): void
     {
-        config(['medical_documents.password' => 'top-secret-password', 'medical_documents.process_timeout' => 1]);
+        config(['medical_documents.pdf_password' => 'top-secret-password', 'medical_documents.process_timeout' => 1]);
         $tools = Mockery::mock(PdfToolAvailabilityService::class);
         $tools->shouldReceive('path')->with('qpdf')->andReturn('qpdf');
         $process = Mockery::mock(Process::class);
@@ -80,5 +80,39 @@ class PdfEncryptionServiceTest extends TestCase
             $this->assertStringStartsWith('@', $service->command[1]);
             $this->assertFileDoesNotExist(substr($service->command[1], 1));
         }
+    }
+
+    public function test_ghostscript_receives_the_configured_owner_password_directly(): void
+    {
+        config(['medical_documents.pdf_password' => 'institutional-owner-password', 'medical_documents.process_timeout' => 1]);
+        $tools = Mockery::mock(PdfToolAvailabilityService::class);
+        $tools->shouldReceive('path')->with('qpdf')->andReturnNull();
+        $tools->shouldReceive('path')->with('gs')->andReturn('gs');
+        $process = Mockery::mock(Process::class);
+        $process->shouldReceive('setTimeout')->andReturnSelf();
+        $process->shouldReceive('run')->once();
+        $process->shouldReceive('isSuccessful')->andReturnTrue();
+        $service = new class($tools, $process) extends PdfEncryptionService
+        {
+            public array $command = [];
+
+            public function __construct(PdfToolAvailabilityService $tools, private Process $fake)
+            {
+                parent::__construct($tools);
+            }
+
+            protected function process(array $command): Process
+            {
+                $this->command = $command;
+
+                return $this->fake;
+            }
+        };
+
+        $service->encrypt('input.pdf', 'output.pdf');
+
+        $this->assertContains('-sUserPassword=', $service->command);
+        $this->assertContains('-sOwnerPassword=institutional-owner-password', $service->command);
+        $this->assertStringNotContainsString('app.key', implode(' ', $service->command));
     }
 }

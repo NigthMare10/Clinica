@@ -33,7 +33,7 @@ export default defineConfig({
             CACHE_STORE: 'array',
             SESSION_DRIVER: 'database',
             APP_URL: 'http://127.0.0.1:8017',
-            MEDICAL_PDF_PASSWORD: 'E2E-Pdf-Encryption-Only!',
+            INSTITUTIONAL_PDF_PASSWORD: 'E2E-Pdf-Encryption-Only!',
             MEDICAL_PDF_ENCRYPTION: 'true',
         },
     },

@@ -110,6 +110,14 @@ const date = (value?: string | null) =>
               timeZone: "UTC",
           }).format(new Date(`${value}T12:00:00Z`))
         : "No disponible";
+const consultationTime = (value?: string | null) =>
+    (() => {
+        if (!value) return "No especificada";
+        const [hours, minutes] = value.split(":").map(Number);
+        const period = hours < 12 ? "a. m." : "p. m.";
+
+        return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${period}`;
+    })();
 const verifyDetails = () => {
     if (props.challenge?.method === "token")
         unlock.get(window.location.pathname, { preserveScroll: true });
@@ -148,10 +156,7 @@ const verifyDetails = () => {
                             <small>Tipo</small
                             ><strong>{{ document.type }}</strong>
                         </div>
-                        <div>
-                            <small>Emisión exacta</small
-                            ><strong>{{ dateTime(document.issued_at) }}</strong>
-                        </div>
+                        <div><small>Fecha de emisión</small><strong>{{ date(document.issued_at?.slice(0, 10)) }}</strong></div>
                         <div>
                             <small>Validación exacta</small
                             ><strong>{{
@@ -244,11 +249,10 @@ const verifyDetails = () => {
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt>Hora</dt>
+                                        <dt>Hora de consulta</dt>
                                         <dd>
                                             {{
-                                                document.consultation_time ||
-                                                "No registrada"
+                                                consultationTime(document.consultation_time)
                                             }}
                                         </dd>
                                     </div>
