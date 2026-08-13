@@ -156,7 +156,17 @@ const verifyDetails = () => {
                             <small>Tipo</small
                             ><strong>{{ document.type }}</strong>
                         </div>
-                        <div><small>Fecha de emisión</small><strong>{{ date(document.issued_at?.slice(0, 10)) }}</strong></div>
+                        <div>
+                            <small>Fecha y hora de atención</small>
+                            <strong v-if="document.consultation_time">
+                                {{ date(document.consultation_date) }} a las
+                                {{ consultationTime(document.consultation_time) }}
+                            </strong>
+                            <strong v-else>
+                                {{ date(document.consultation_date) }}<br />
+                                Hora no especificada
+                            </strong>
+                        </div>
                         <div>
                             <small>Validación exacta</small
                             ><strong>{{
