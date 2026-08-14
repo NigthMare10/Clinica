@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\InvoiceStatus;
 use App\Enums\UserRole;
 use App\Models\Invoice;
 use App\Models\User;
@@ -33,8 +34,20 @@ class InvoicePolicy
         return $user->hasClinicAccess($invoice->clinic_id) && $user->hasAnyRole(UserRole::ADMINISTRATOR, UserRole::DOCUMENT_OPERATOR);
     }
 
+    public function update(User $user, Invoice $invoice): bool
+    {
+        return $invoice->status === InvoiceStatus::DRAFT
+            && $user->hasClinicAccess($invoice->clinic_id)
+            && $user->hasAnyRole(UserRole::ADMINISTRATOR, UserRole::DOCUMENT_OPERATOR);
+    }
+
     public function void(User $user, Invoice $invoice): bool
     {
         return $user->hasClinicAccess($invoice->clinic_id) && $user->hasAnyRole(UserRole::ADMINISTRATOR);
+    }
+
+    public function correct(User $user, Invoice $invoice): bool
+    {
+        return $invoice->status === InvoiceStatus::ISSUED && $this->void($user, $invoice);
     }
 }

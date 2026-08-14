@@ -11,11 +11,15 @@ const props = defineProps<{
     authorizations: any[];
     canIssue: boolean;
     canVoid: boolean;
+    canUpdate: boolean;
+    canCorrect: boolean;
 }>();
 const issueOpen = ref(false);
 const voidOpen = ref(false);
+const correctOpen = ref(false);
 const authorizationId = ref("");
 const voidReason = ref("");
+const correctionReason = ref("");
 const error = ref("");
 const busy = ref(false);
 const verificationUrl = ref("");
@@ -30,6 +34,29 @@ const money = (value: string) =>
         currency: "HNL",
     }).format(Number(value));
 const dateTime = (value?: string | null) => hondurasDateTime(value);
+const serviceDate = (value?: string | null) =>
+    value
+        ? new Intl.DateTimeFormat("es-HN", {
+              dateStyle: "long",
+              timeZone: "UTC",
+          }).format(new Date(`${value}T12:00:00Z`))
+        : "No registrada";
+const serviceTime = (value?: string | null) => {
+    if (!value) return "No registrada";
+    const [hours, minutes] = value.split(":").map(Number);
+    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "a. m." : "p. m."}`;
+};
+const documentType = (value?: string | null) =>
+    ({
+        CONSTANCIA: "Constancia médica",
+        INCAPACIDAD: "Incapacidad médica",
+        MEDICAL_CERTIFICATE: "Certificado médico",
+        MEDICAL_REPORT: "Informe médico",
+        PRESCRIPTION: "Receta médica",
+        LAB_RESULT: "Resultado de laboratorio",
+        REFERRAL: "Referencia médica",
+        OTHER: "Otro documento médico",
+    })[value || ""] || "No registrado";
 const issue = async () => {
     error.value = "";
     busy.value = true;
@@ -60,6 +87,20 @@ const voidInvoice = async () => {
     } catch (e: any) {
         error.value =
             e.response?.data?.message || "No fue posible anular la factura.";
+    } finally {
+        busy.value = false;
+    }
+};
+const correctInvoice = async () => {
+    error.value = "";
+    busy.value = true;
+    try {
+        const { data } = await axios.post(route("admin.invoices.corrections.store", props.invoice.id), {
+            reason: correctionReason.value,
+        });
+        router.visit(route("admin.invoices.show", data.replacement.id));
+    } catch (e: any) {
+        error.value = e.response?.data?.message || "No fue posible corregir la factura.";
     } finally {
         busy.value = false;
     }
@@ -116,6 +157,14 @@ const voidInvoice = async () => {
                     class="button button--secondary"
                     :href="route('admin.invoices.download', invoice.id)"
                     >Descargar factura</a
+                >
+                <a
+                    v-if="invoice.status !== 'DRAFT'"
+                    class="button button--secondary"
+                    :href="route('admin.invoices.preview', invoice.id)"
+                    target="_blank"
+                    rel="noopener"
+                    >Vista previa factura</a
                 >
                 <a
                     v-if="verificationUrl"
@@ -187,6 +236,36 @@ const voidInvoice = async () => {
                     ><small>Impuestos: {{ money(invoice.tax_total) }}</small>
                 </article>
             </div>
+            <article class="panel invoice-service-summary">
+                <div>
+                    <p class="kicker">Atención vinculada</p>
+                    <h3>Fecha y hora del servicio</h3>
+                </div>
+                <dl>
+                    <div><dt>Fecha de atención/servicio</dt><dd>{{ serviceDate(invoice.service_date) }}</dd></div>
+                    <div><dt>Hora de atención</dt><dd>{{ serviceTime(invoice.service_time) }}</dd></div>
+                    <div><dt>Emisión fiscal</dt><dd>{{ invoice.issued_at ? dateTime(invoice.issued_at) : "Pendiente" }}</dd></div>
+                </dl>
+            </article>
+            <article v-if="invoice.medical_document" class="panel related-medical-document">
+                <div class="panel-head">
+                    <div><p class="kicker">Vinculación administrativa</p><h3>Documento médico relacionado</h3><p>Datos administrativos de trazabilidad. No incluye diagnóstico, síntomas ni contenido clínico.</p></div>
+                    <StatusBadge :status="invoice.medical_document.status" />
+                </div>
+                <dl class="related-medical-document__details">
+                    <div><dt>Código</dt><dd>{{ invoice.medical_document_code || invoice.medical_document.public_code || "No registrado" }}</dd></div>
+                    <div><dt>Tipo</dt><dd>{{ documentType(invoice.medical_document_type) }}</dd></div>
+                    <div><dt>Paciente</dt><dd>{{ invoice.patient ? `${invoice.patient.first_name} ${invoice.patient.last_name}` : invoice.recipient_name || "No registrado" }}</dd></div>
+                    <div><dt>Identidad</dt><dd>{{ invoice.recipient_tax_id || "No registrada" }}</dd></div>
+                    <div><dt>Edad</dt><dd>{{ invoice.medical_document.age_at_consultation ?? invoice.recipient_age ?? "No registrada" }}</dd></div>
+                    <div><dt>Fecha de atención</dt><dd>{{ serviceDate(invoice.service_date) }}</dd></div>
+                    <div><dt>Hora de atención</dt><dd>{{ serviceTime(invoice.service_time) }}</dd></div>
+                    <div><dt>Profesional</dt><dd>{{ invoice.service_professional || "No registrado" }}</dd></div>
+                    <div><dt>Período de incapacidad</dt><dd>{{ invoice.medical_document.leave_start_date ? `${serviceDate(invoice.medical_document.leave_start_date)} a ${serviceDate(invoice.medical_document.leave_end_date)}` : "No aplica o no registrado" }}</dd></div>
+                    <div><dt>Estado</dt><dd>{{ invoice.medical_document.status || "No registrado" }}</dd></div>
+                </dl>
+                <div class="action-row"><Link class="button button--secondary" :href="route('admin.documents.review', invoice.medical_document.id)">Abrir documento médico</Link><Link v-if="invoice.medical_document.public_code" class="button button--secondary" :href="route('public.verify.lookup', { code: invoice.medical_document.public_code })">Verificar documento médico</Link></div>
+            </article>
             <article class="panel table-scroll">
                 <h3>Conceptos</h3>
                 <table>
@@ -222,6 +301,8 @@ const voidInvoice = async () => {
                         Esta acción asigna y consume el siguiente NCF de la
                         autorización elegida. No puede revertirse.
                     </p>
+                    <p>Puede editar este borrador antes de emitir. La relación con el documento médico se conserva.</p>
+                    <Link v-if="canUpdate" class="row-action" :href="route('admin.invoices.create', { invoice_id: invoice.id })">Editar borrador</Link>
                 </div>
                 <template v-if="canIssue">
                     <button
@@ -244,6 +325,7 @@ const voidInvoice = async () => {
                         La anulación conserva el NCF y deja un registro de
                         auditoría.
                     </p>
+                    <p v-if="invoice.medical_document">Para corregir el documento médico, use el documento relacionado. La corrección médica no modifica esta factura emitida.</p>
                 </div>
                 <button
                     v-if="canVoid"
@@ -251,7 +333,12 @@ const voidInvoice = async () => {
                     @click="voidOpen = true"
                 >
                     Anular factura</button
-                ><span v-else>No tiene permiso para anular.</span>
+                    ><span v-else>No tiene permiso para anular.</span>
+                ><button
+                    v-if="canCorrect"
+                    class="button button--secondary"
+                    @click="correctOpen = true"
+                >Corregir factura</button>
             </div>
             <article class="panel">
                 <h3>Historial</h3>
@@ -329,6 +416,17 @@ const voidInvoice = async () => {
                         >
                             {{ busy ? "Anulando..." : "Confirmar anulación" }}
                         </button>
+                    </div>
+                </section>
+            </div>
+            <div v-if="correctOpen" class="modal-backdrop">
+                <section class="panel modal-card">
+                    <h3>Corregir factura emitida</h3>
+                    <p>La factura actual se anulará conservando su NCF y se creará un borrador de reemplazo con un NCF nuevo al emitirlo.</p>
+                    <textarea v-model="correctionReason" rows="4" minlength="3" maxlength="2000" placeholder="Motivo de corrección"></textarea>
+                    <div class="form-actions">
+                        <button class="button button--secondary" @click="correctOpen = false">Cancelar</button>
+                        <button class="button button--admin" :disabled="busy || correctionReason.trim().length < 3" @click="correctInvoice">{{ busy ? "Corrigiendo..." : "Anular y crear reemplazo" }}</button>
                     </div>
                 </section>
             </div>

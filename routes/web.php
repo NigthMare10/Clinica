@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\PatientController;
 use App\Http\Controllers\Admin\PdfTemplateController;
 use App\Http\Controllers\Admin\PrivateDoctorAssetController;
 use App\Http\Controllers\Admin\PrivateDocumentDownloadController;
+use App\Http\Controllers\Admin\PrivatePdfPreviewController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\SitePageController;
 use App\Http\Controllers\Admin\SpecialtyController;
@@ -54,6 +55,7 @@ Route::middleware(['auth', 'verified', 'role:SUPER_ADMIN,ADMINISTRATOR,DOCTOR,DO
         Route::post('/documents/{document}/revoke', [MedicalDocumentController::class, 'revoke'])->name('documents.revoke');
         Route::post('/documents/{document}/corrections', [MedicalDocumentController::class, 'correct'])->name('documents.corrections.store');
         Route::get('/documents/{document}/download/{version}', PrivateDocumentDownloadController::class)->name('documents.download');
+        Route::get('/documents/{document}/preview', [PrivatePdfPreviewController::class, 'document'])->name('documents.preview');
         Route::get('/verifications', [VerificationController::class, 'index'])->name('verifications.index');
         Route::get('/fiscal-authorizations', [FiscalAuthorizationController::class, 'index'])->name('fiscal-authorizations.index');
         Route::post('/fiscal-authorizations', [FiscalAuthorizationController::class, 'store'])->name('fiscal-authorizations.store');
@@ -62,9 +64,12 @@ Route::middleware(['auth', 'verified', 'role:SUPER_ADMIN,ADMINISTRATOR,DOCTOR,DO
         Route::get('/invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
         Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::put('/invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
         Route::get('/invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
+        Route::get('/invoices/{invoice}/preview', [PrivatePdfPreviewController::class, 'invoice'])->name('invoices.preview');
         Route::post('/invoices/{invoice}/issue', [InvoiceController::class, 'issue'])->name('invoices.issue');
         Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
+        Route::post('/invoices/{invoice}/corrections', [InvoiceController::class, 'correct'])->name('invoices.corrections.store');
         Route::get('/provider/private-assets/{doctor}/{asset}', PrivateDoctorAssetController::class)->name('doctors.assets.show');
         Route::middleware('role:SUPER_ADMIN,ADMINISTRATOR')->prefix('settings/signature')->name('settings.signature.')->group(function () {
             Route::get('/', [InstitutionalAssetController::class, 'index'])->name('index');

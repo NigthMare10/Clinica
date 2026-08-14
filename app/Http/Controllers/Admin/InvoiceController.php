@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\InvoiceStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CorrectInvoiceRequest;
 use App\Http\Requests\IssueInvoiceRequest;
 use App\Http\Requests\StoreInvoiceRequest;
+use App\Http\Requests\UpdateInvoiceRequest;
 use App\Http\Requests\VoidInvoiceRequest;
 use App\Models\BillingService;
 use App\Models\Clinic;
@@ -47,12 +50,18 @@ class InvoiceController extends Controller
     {
         $this->authorize('create', Invoice::class);
         $clinicIds = $request->user()->hasAnyRole('SUPER_ADMIN') ? Clinic::pluck('id') : $request->user()->accessibleClinicIds();
+        $draftInvoice = null;
+        if ($request->filled('invoice_id')) {
+            $draftInvoice = Invoice::query()->accessibleTo($request->user())->with('items')->findOrFail($request->string('invoice_id'));
+            $this->authorize('update', $draftInvoice);
+        }
 
         return Inertia::render('Admin/Invoices/Create', [
             'clinics' => Clinic::query()->whereIn('id', $clinicIds)->orderBy('name')->get(['id', 'name']),
             'patients' => Patient::query()->accessibleTo($request->user())->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'document_number'])->makeVisible('document_number'),
             'documents' => MedicalDocument::query()->accessibleTo($request->user())->where('is_current_revision', true)->whereNotNull('public_code')->with('patient:id,first_name,last_name,document_number')->latest()->get(['id', 'clinic_id', 'patient_id', 'public_code', 'consultation_date', 'consultation_time']),
             'sourceDocumentId' => $request->string('medical_document_id')->toString(),
+            'draftInvoice' => $draftInvoice,
             'services' => BillingService::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'default_price', 'tax_type']),
         ]);
     }
@@ -78,13 +87,31 @@ class InvoiceController extends Controller
         $this->authorize('view', $invoice);
 
         return Inertia::render('Admin/Invoices/Show', [
-            'invoice' => $invoice->load(['items', 'authorization', 'audits.user:id,name', 'patient:id,first_name,last_name', 'clinic:id,name', 'medicalDocument:id,public_code,status'])->makeVisible('recipient_tax_id'),
+            'invoice' => $invoice->load(['items', 'authorization', 'audits.user:id,name', 'patient:id,first_name,last_name', 'clinic:id,name', 'medicalDocument:id,public_code,status,age_at_consultation,leave_start_date,leave_end_date,leave_days'])->makeVisible('recipient_tax_id'),
             'authorizations' => FiscalAuthorization::query()
                 ->whereHas('clinic', fn ($query) => $query->where('code', config('fiscal_reference.reference_invoice_import.central_clinic_code')))
                 ->latest()->get(['id', 'ncf_prefix', 'next_number', 'range_end', 'valid_from', 'valid_until', 'status', 'is_active']),
             'canIssue' => $request->user()->can('issue', $invoice),
             'canVoid' => $request->user()->can('void', $invoice),
+            'canUpdate' => $request->user()->can('update', $invoice),
+            'canCorrect' => $request->user()->can('correct', $invoice),
         ]);
+    }
+
+    public function update(UpdateInvoiceRequest $request, Invoice $invoice, InvoiceDraftService $drafts): JsonResponse
+    {
+        $this->authorize('update', $invoice);
+        abort_unless($invoice->status === InvoiceStatus::DRAFT, 403);
+        $data = $request->validated();
+        abort_unless($request->user()->hasClinicAccess($data['clinic_id']), 403);
+        if (! empty($data['patient_id'])) {
+            abort_unless(Patient::query()->accessibleTo($request->user())->whereKey($data['patient_id'])->exists(), 422, 'El paciente no está disponible para esta clínica.');
+        }
+        if (! empty($data['medical_document_id'])) {
+            abort_unless(MedicalDocument::query()->accessibleTo($request->user())->whereKey($data['medical_document_id'])->where('clinic_id', $data['clinic_id'])->exists(), 422, 'El documento médico no pertenece a la clínica seleccionada.');
+        }
+
+        return response()->json($drafts->update($invoice, $data, $request->user(), ['ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]));
     }
 
     public function issue(IssueInvoiceRequest $request, Invoice $invoice, InvoiceIssueService $service): JsonResponse
@@ -127,5 +154,13 @@ class InvoiceController extends Controller
         $this->authorize('void', $invoice);
 
         return response()->json($service->void($invoice, $request->user(), $request->validated('reason')));
+    }
+
+    public function correct(CorrectInvoiceRequest $request, Invoice $invoice, InvoiceIssueService $service): JsonResponse
+    {
+        $this->authorize('correct', $invoice);
+        abort_unless($invoice->status === InvoiceStatus::ISSUED, 403);
+
+        return response()->json($service->correct($invoice, $request->user(), $request->validated('reason')));
     }
 }

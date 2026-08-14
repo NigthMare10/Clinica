@@ -24,16 +24,17 @@ class QuickBillingCoordinator
     /** @return array{document: MedicalDocument, invoice: Invoice} */
     public function issue(MedicalDocument $document, BillingProfile $profile, User $user): array
     {
-        if ($profile->clinic_id !== $document->clinic_id || $profile->certificate_kind !== $document->certificate_kind || ! $profile->is_active || ! $profile->service->is_active) {
-            throw new DomainException('The billing profile does not apply to this medical document.');
-        }
-
         $medicalPath = null;
         $issuedDocument = null;
 
         try {
             return DB::transaction(function () use ($document, $profile, $user, &$medicalPath, &$issuedDocument): array {
+                $profile = BillingProfile::query()->with('service')->lockForUpdate()->findOrFail($profile->id);
                 $document = MedicalDocument::query()->lockForUpdate()->findOrFail($document->id);
+                $service = $profile->service;
+                if ($profile->clinic_id !== $document->clinic_id || $profile->certificate_kind !== $document->certificate_kind || ! $profile->is_active || ! $service?->is_active) {
+                    throw new DomainException('The billing profile does not apply to this medical document.');
+                }
                 $document->forceFill([
                     'inconsistencies' => [],
                     'reviewed_by' => $user->id,
@@ -48,13 +49,9 @@ class QuickBillingCoordinator
                 $issuedDocument = $document;
                 $medicalPath = $document->getRawOriginal('issued_path') ?: $document->getAttribute('issued_path');
 
-                $service = $profile->service;
                 $invoice = $this->drafts->create([
                     'clinic_id' => $document->clinic_id,
-                    'patient_id' => $document->patient_id,
                     'medical_document_id' => $document->id,
-                    'recipient_name' => trim($document->patient->first_name.' '.$document->patient->last_name),
-                    'recipient_tax_id' => $document->patient->document_number,
                     'payment_method' => $profile->default_payment_method,
                     'items' => [[
                         'service_code' => $service->code,

@@ -13,13 +13,13 @@ class Invoice extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['clinic_id', 'fiscal_authorization_id', 'patient_id', 'medical_document_id', 'recipient_name', 'recipient_tax_id', 'payment_method', 'paid_total', 'balance', 'order_number', 'invoice_control_number', 'created_by'];
+    protected $fillable = ['clinic_id', 'fiscal_authorization_id', 'patient_id', 'medical_document_id', 'replacement_for_invoice_id', 'service_date', 'service_time', 'medical_document_code', 'medical_document_type', 'service_professional', 'recipient_name', 'recipient_tax_id', 'payment_method', 'paid_total', 'balance', 'order_number', 'invoice_control_number', 'created_by'];
 
     protected $hidden = ['qr_token_hash', 'recipient_tax_id', 'issued_path'];
 
     protected function casts(): array
     {
-        return ['status' => InvoiceStatus::class, 'issued_at' => 'datetime', 'voided_at' => 'datetime'];
+        return ['status' => InvoiceStatus::class, 'service_date' => 'date', 'service_time' => 'datetime:H:i', 'issued_at' => 'datetime', 'voided_at' => 'datetime'];
     }
 
     protected static function booted(): void
@@ -75,6 +75,16 @@ class Invoice extends Model
     public function medicalDocument()
     {
         return $this->belongsTo(MedicalDocument::class);
+    }
+
+    public function replacementForInvoice()
+    {
+        return $this->belongsTo(self::class, 'replacement_for_invoice_id');
+    }
+
+    public function replacements()
+    {
+        return $this->hasMany(self::class, 'replacement_for_invoice_id');
     }
 
     public function items()

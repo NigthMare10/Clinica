@@ -14,7 +14,7 @@ class PublicInvoiceVerificationController extends Controller
     {
         abort_unless((bool) preg_match('/^[A-Za-z0-9]{64}$/', $token), 404);
         $invoice = Invoice::query()->where('qr_token_hash', hash('sha256', $token))->firstOrFail();
-        $invoice->loadMissing(['authorization', 'medicalDocument:id,public_code']);
+        $invoice->loadMissing('authorization');
         $verifiedAt = now(config('institution.timezone'));
 
         InvoiceAudit::create([
@@ -42,7 +42,9 @@ class PublicInvoiceVerificationController extends Controller
                 'issuer_rtn' => $invoice->authorization?->rtn,
                 'emission_deadline' => $invoice->authorization?->valid_until?->toDateString(),
                 'authorized_range' => $invoice->authorization ? [$invoice->authorization->rangeStartNcf(), $invoice->authorization->rangeEndNcf()] : null,
-                'medical_document_code' => $invoice->medicalDocument?->public_code,
+                'medical_document_code' => $invoice->medical_document_code,
+                'service_date' => $invoice->service_date?->toDateString(),
+                'service_time' => $invoice->service_time?->format('H:i'),
                 'hash' => $invoice->issued_hash,
                 'verified_at' => $verifiedAt->toIso8601String(),
                 'method' => 'QR_LINK',

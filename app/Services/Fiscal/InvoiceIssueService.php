@@ -4,8 +4,8 @@ namespace App\Services\Fiscal;
 
 use App\Enums\FiscalAuthorizationStatus;
 use App\Enums\InvoiceStatus;
-use App\Models\FiscalAuthorization;
 use App\Models\Clinic;
+use App\Models\FiscalAuthorization;
 use App\Models\Invoice;
 use App\Models\InvoiceAudit;
 use App\Models\User;
@@ -111,6 +111,58 @@ class InvoiceIssueService
         });
     }
 
+    /** @return array{invoice: Invoice, replacement: Invoice} */
+    public function correct(Invoice $invoice, User $user, string $reason): array
+    {
+        return DB::transaction(function () use ($invoice, $user, $reason): array {
+            $invoice = Invoice::query()->with('items')->lockForUpdate()->findOrFail($invoice->id);
+            if ($invoice->status !== InvoiceStatus::ISSUED) {
+                throw new \DomainException('Only issued invoices can be corrected.');
+            }
+
+            $invoice->forceFill([
+                'status' => InvoiceStatus::VOID,
+                'voided_by' => $user->id,
+                'voided_at' => now(),
+                'void_reason' => $reason,
+            ])->save();
+            $this->audit($invoice, $user, 'VOIDED', ['reason' => $reason, 'ncf' => $invoice->ncf]);
+
+            $replacement = Invoice::create([
+                'clinic_id' => $invoice->clinic_id,
+                'patient_id' => $invoice->patient_id,
+                'medical_document_id' => $invoice->medical_document_id,
+                'replacement_for_invoice_id' => $invoice->id,
+                'recipient_name' => $invoice->recipient_name,
+                'recipient_tax_id' => $invoice->recipient_tax_id,
+                'payment_method' => $invoice->payment_method,
+                'paid_total' => $invoice->paid_total,
+                'balance' => $invoice->balance,
+                'service_date' => $invoice->service_date,
+                'service_time' => $invoice->service_time,
+                'medical_document_code' => $invoice->medical_document_code,
+                'medical_document_type' => $invoice->medical_document_type,
+                'service_professional' => $invoice->service_professional,
+                'created_by' => $user->id,
+            ]);
+            $replacement->forceFill($invoice->only([
+                'subtotal', 'discount_total', 'exempt_total', 'exonerated_total',
+                'taxable_15_total', 'taxable_18_total', 'isv_15_total', 'isv_18_total',
+                'tax_15_total', 'tax_18_total', 'tax_total', 'total',
+            ]))->save();
+            foreach ($invoice->items as $item) {
+                $replacement->items()->create($item->only([
+                    'position', 'service_code', 'medical_document_id', 'description', 'quantity',
+                    'unit_price', 'discount', 'tax_category', 'tax_rate', 'net_amount', 'tax_amount', 'total_amount',
+                ]));
+            }
+            $this->audit($invoice, $user, 'CORRECTION_CREATED', ['reason' => $reason, 'replacement_invoice_id' => $replacement->id]);
+            $this->audit($replacement, $user, 'CORRECTION_DRAFT_CREATED', ['replacement_for_invoice_id' => $invoice->id]);
+
+            return ['invoice' => $invoice, 'replacement' => $replacement->load('items')];
+        });
+    }
+
     private function lockedAuthorization(Invoice $invoice, ?string $authorizationId): FiscalAuthorization
     {
         $centralClinicId = Clinic::query()->where('code', config('fiscal_reference.reference_invoice_import.central_clinic_code'))->value('id');
@@ -131,7 +183,7 @@ class InvoiceIssueService
 
     private function canonicalSource(Invoice $invoice): string
     {
-        return $this->canonicalJson(['clinic_id' => $invoice->clinic_id, 'patient_id' => $invoice->patient_id, 'medical_document_id' => $invoice->medical_document_id, 'recipient_name' => $invoice->recipient_name, 'recipient_tax_id' => $invoice->recipient_tax_id, 'payment_method' => $invoice->payment_method, 'paid_total' => $invoice->paid_total, 'balance' => $invoice->balance, 'items' => $invoice->items->map(fn ($item) => ['position' => $item->position, 'description' => $item->description, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'discount' => $item->discount, 'tax_category' => $item->tax_category->value])->all()]);
+        return $this->canonicalJson(['clinic_id' => $invoice->clinic_id, 'patient_id' => $invoice->patient_id, 'medical_document_id' => $invoice->medical_document_id, 'recipient_name' => $invoice->recipient_name, 'recipient_tax_id' => $invoice->recipient_tax_id, 'service_date' => $invoice->service_date?->toDateString(), 'service_time' => $invoice->service_time?->format('H:i'), 'medical_document_code' => $invoice->medical_document_code, 'medical_document_type' => $invoice->medical_document_type, 'service_professional' => $invoice->service_professional, 'payment_method' => $invoice->payment_method, 'paid_total' => $invoice->paid_total, 'balance' => $invoice->balance, 'items' => $invoice->items->map(fn ($item) => ['position' => $item->position, 'description' => $item->description, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'discount' => $item->discount, 'tax_category' => $item->tax_category->value])->all()]);
     }
 
     private function internalNumber(string $prefix): string

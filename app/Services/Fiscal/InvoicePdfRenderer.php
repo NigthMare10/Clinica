@@ -54,8 +54,8 @@ class InvoicePdfRenderer
     {
         $pdf->SetFont('Helvetica', 'B', 8.5);
         $pdf->Cell(44, 8, 'Orden: '.$invoice->order_number, 1, 0);
-        $pdf->Cell(44, 8, 'Fecha: '.$invoice->issued_at->format('d/m/Y'), 1, 0, 'C');
-        $pdf->Cell(38, 8, 'Hora: '.$invoice->issued_at->format('h:i A'), 1, 0, 'C');
+        $pdf->Cell(44, 8, $this->text('Emisión fiscal: '.$invoice->issued_at->format('d/m/Y')), 1, 0, 'C');
+        $pdf->Cell(38, 8, $this->text('Hora emisión: '.$invoice->issued_at->format('h:i A')), 1, 0, 'C');
         $pdf->Cell(64, 8, 'Factura: '.$invoice->invoice_control_number, 1, 1);
     }
 
@@ -64,25 +64,18 @@ class InvoicePdfRenderer
         $y = $pdf->GetY();
         $pdf->Rect(10, $y, 190, 31);
         $pdf->SetXY(14, $y + 3);
-        $pdf->SetFont('Helvetica', '', 10.5);
-        $pdf->Cell(79, 5, $this->text($invoice->recipient_name ?: 'Consumidor final'));
+        $pdf->SetFont('Helvetica', 'B', 9);
+        $pdf->Cell(92, 5, $this->text('Fecha de atención/servicio: '.$this->serviceDate($invoice)));
+        $pdf->Cell(92, 5, $this->text('Hora de atención: '.$this->serviceTime($invoice)), 0, 1);
+        $pdf->SetFont('Helvetica', '', 9.5);
+        $pdf->SetXY(14, $y + 10);
+        $pdf->Cell(82, 5, $this->text('Paciente: '.($invoice->recipient_name ?: 'Consumidor final')));
         $pdf->SetFont('Helvetica', 'B', 7.7);
-        $pdf->SetXY(96, $y + 3);
-        $pdf->Cell(47, 4, $this->text('Cuenta:'));
-        $pdf->Cell(52, 4, 'ID/RTN: '.($invoice->recipient_tax_id ?: ''));
-        $pdf->SetXY(96, $y + 7);
-        $pdf->Cell(47, 4, $this->text('Edad: '.($document?->age_at_consultation ?? $patient?->age ?? '')));
-        $pdf->Cell(52, 4, $this->text('Sexo: '.($patient?->sex ?? '')));
-        $pdf->SetXY(96, $y + 11);
-        $pdf->Cell(47, 4, 'Responsable:');
-        $pdf->Cell(52, 4, 'Cert:');
-        $pdf->SetXY(96, $y + 15);
-        $pdf->Cell(47, 4, $this->text('Privado Póliza:'));
-        $pdf->SetXY(96, $y + 19);
-        $pdf->Cell(99, 4, $this->text('Médico: '.config('institution.provider.name')));
-        $pdf->SetXY(96, $y + 23);
-        $pdf->Cell(47, 4, 'Email: '.($patient?->email ?? ''));
-        $pdf->Cell(52, 4, 'Tel: '.($patient?->phone ?? ''));
+        $pdf->Cell(48, 5, 'ID/RTN: '.($invoice->recipient_tax_id ?: 'No indicado'));
+        $pdf->Cell(48, 5, $this->text('Edad: '.($document?->age_at_consultation ?? $patient?->age ?? 'No indicada')), 0, 1);
+        $pdf->SetXY(14, $y + 17);
+        $pdf->Cell(92, 4, $this->text('Documento médico: '.($invoice->medical_document_code ?: 'No relacionado')));
+        $pdf->Cell(92, 4, $this->text('Profesional: '.($invoice->service_professional ?: config('institution.provider.name'))), 0, 1);
         $pdf->SetY($y + 31);
     }
 
@@ -125,13 +118,13 @@ class InvoicePdfRenderer
         $pdf->Rect(10, $y, $left, $height);
         $pdf->Rect(114, $y, $right, $height);
         $lines = [
-            'Descuentos y Rebajas:' => 0,
+            'Descuentos y Rebajas:' => $invoice->discount_total,
             'Importe Exonerado:' => $invoice->exonerated_total,
             'Importe Exento:' => $invoice->exempt_total,
-            'Importe Gravado 15%:' => $invoice->tax_15_total,
-            'Importe Gravado 18%:' => $invoice->tax_18_total,
-            'ISV 15%:' => $invoice->tax_15_total,
-            'ISV 18%:' => $invoice->tax_18_total,
+            'Base gravada 15%:' => $invoice->taxable_15_total,
+            'Base gravada 18%:' => $invoice->taxable_18_total,
+            'ISV 15%:' => $invoice->isv_15_total,
+            'ISV 18%:' => $invoice->isv_18_total,
         ];
         $pdf->SetFont('Helvetica', '', 7.6);
         foreach ($lines as $label => $value) {
@@ -215,5 +208,21 @@ class InvoicePdfRenderer
     private function text(string $value): string
     {
         return iconv('UTF-8', 'windows-1252//TRANSLIT', $value) ?: $value;
+    }
+
+    private function serviceDate(Invoice $invoice): string
+    {
+        return $invoice->service_date?->format('d/m/Y') ?: 'No registrada';
+    }
+
+    private function serviceTime(Invoice $invoice): string
+    {
+        if (! $invoice->service_time) {
+            return 'No registrada';
+        }
+
+        [$hours, $minutes] = array_map('intval', explode(':', $invoice->service_time->format('H:i')));
+
+        return sprintf('%d:%02d %s', $hours % 12 ?: 12, $minutes, $hours < 12 ? 'AM' : 'PM');
     }
 }

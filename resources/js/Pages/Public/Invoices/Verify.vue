@@ -17,6 +17,8 @@ type Invoice = {
     emission_deadline: string | null;
     authorized_range: [number, number] | null;
     medical_document_code: string | null;
+    service_date: string | null;
+    service_time: string | null;
     hash: string | null;
     verified_at: string;
     method: string;
@@ -51,6 +53,11 @@ const date = (value: string | null) =>
               timeZone: "UTC",
           }).format(new Date(`${value}T12:00:00Z`))
         : "No disponible";
+const time = (value: string | null) => {
+    if (!value) return "No disponible";
+    const [hours, minutes] = value.split(":").map(Number);
+    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "a. m." : "p. m."}`;
+};
 </script>
 
 <template>
@@ -70,7 +77,9 @@ const date = (value: string | null) =>
                 <div class="verification-dossier invoice-verification">
                     <section class="verification-section verification-status-grid">
                         <div><small>NCF</small><strong>{{ invoice.ncf || "No disponible" }}</strong></div>
-                        <div><small>Emisión</small><strong>{{ dateTime(invoice.issued_at) }}</strong></div>
+                        <div><small>Emisión fiscal</small><strong>{{ dateTime(invoice.issued_at) }}</strong></div>
+                        <div><small>Fecha de servicio</small><strong>{{ date(invoice.service_date) }}</strong></div>
+                        <div><small>Hora de servicio</small><strong>{{ time(invoice.service_time) }}</strong></div>
                         <div><small>Validación</small><strong>{{ dateTime(invoice.verified_at) }}</strong></div>
                         <div><small>Método</small><strong>Enlace QR</strong></div>
                     </section>
@@ -112,6 +121,7 @@ const date = (value: string | null) =>
                             <section v-if="invoice.medical_document_code" class="verification-section">
                                 <p class="kicker">Documento relacionado</p>
                                 <h2>Verificación médica</h2>
+                                <p>Código público: <strong>{{ invoice.medical_document_code }}</strong></p>
                                 <p>El documento clínico conserva su propio proceso de verificación y protección de datos.</p>
                                 <Link
                                     class="button button--outline button--full"

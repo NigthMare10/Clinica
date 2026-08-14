@@ -16,6 +16,7 @@ use App\Models\Invoice;
 use App\Models\MedicalDocument;
 use App\Models\Patient;
 use App\Models\PdfTemplate;
+use App\Services\Fiscal\InvoiceMedicalDocumentSnapshotService;
 use App\Services\MedicalDocuments\DocumentHashService;
 use App\Services\MedicalDocuments\MedicalDocumentAuditService;
 use App\Services\MedicalDocuments\MedicalDocumentConsistencyService;
@@ -127,7 +128,7 @@ class MedicalDocumentController extends Controller
         ]);
     }
 
-    public function confirm(ReviewMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentAuditService $audit, MedicalDocumentConsistencyService $consistency, MedicalDocumentRevisionRenderService $revisionRenderer): RedirectResponse
+    public function confirm(ReviewMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentAuditService $audit, MedicalDocumentConsistencyService $consistency, MedicalDocumentRevisionRenderService $revisionRenderer, InvoiceMedicalDocumentSnapshotService $invoiceSnapshots): RedirectResponse
     {
         abort_unless(in_array($document->status, [MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY], true), 422);
         $data = $request->validated();
@@ -156,6 +157,9 @@ class MedicalDocumentController extends Controller
         $document->forceFill(['inconsistencies' => $issues, 'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(), 'status' => $approved ? MedicalDocumentStatus::READY : MedicalDocumentStatus::REVIEW_REQUIRED])->save();
         $revisionRenderer->regenerate($document);
+        if ($approved && $document->reissue_of_id) {
+            $invoiceSnapshots->synchronizeDrafts($document, $request->user(), ['ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]);
+        }
         $audit->record($document, $approved ? 'approved' : 'review_saved', $request->user());
 
         return back()->with('status', $approved ? 'Document approved.' : 'Review saved; blocking issues remain.');
