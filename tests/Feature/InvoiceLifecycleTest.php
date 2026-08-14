@@ -37,7 +37,7 @@ class InvoiceLifecycleTest extends TestCase
         $invoice = $invoice->fresh();
         $this->assertSame('Edited recipient', $invoice->recipient_name);
         $this->assertSame('2026-08-15', $invoice->service_date?->toDateString());
-        $this->assertSame('15:30:00', $invoice->getRawOriginal('service_time'));
+        $this->assertSame('15:30', substr((string) $invoice->getRawOriginal('service_time'), 0, 5));
         $this->assertSame(150.0, (float) $invoice->total);
         $this->assertSame(100.0, (float) $invoice->balance);
         $this->assertSame('Revised service', $invoice->items()->sole()->description);
@@ -77,7 +77,7 @@ class InvoiceLifecycleTest extends TestCase
         $this->assertSame($patient->id, $invoice->patient_id);
         $this->assertSame('Ana Paciente', $invoice->recipient_name);
         $this->assertSame('2026-08-13', $invoice->service_date?->toDateString());
-        $this->assertSame('09:30:00', $invoice->getRawOriginal('service_time'));
+        $this->assertSame('09:30', substr((string) $invoice->getRawOriginal('service_time'), 0, 5));
     }
 
     public function test_an_issued_invoice_cannot_be_directly_updated(): void

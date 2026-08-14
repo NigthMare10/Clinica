@@ -39,8 +39,6 @@ class GeneratedMedicalDocumentController extends Controller
 
         return Inertia::render('Admin/Documents/Generate', [
             'kind' => $kind,
-            'patients' => Patient::accessibleTo(request()->user())->orderBy('last_name')->get(['id', 'first_name', 'last_name', 'document_type', 'document_number', 'birth_date', 'age'])
-                ->makeVisible('document_number'),
             'provider' => config('institution.provider'),
             'clinic' => $clinic,
             'clinics' => $clinics,
@@ -63,9 +61,8 @@ class GeneratedMedicalDocumentController extends Controller
         $validated = $request->validate(['text' => ['required', 'string', 'max:12000']]);
         $analysis = $service->extract($validated['text'], $kind);
         $identity = $analysis['fields']['identity'];
-        $patient = $identity ? Patient::accessibleTo($request->user())->get()->first(
-            fn (Patient $candidate) => preg_replace('/\D+/', '', (string) $candidate->document_number) === $identity
-        ) : null;
+        $patient = $identity ? Patient::accessibleTo($request->user())
+            ->whereRaw("REPLACE(REPLACE(document_number, '-', ''), ' ', '') = ?", [$identity])->first() : null;
 
         return response()->json($analysis + ['patient' => $patient ? [
             'id' => $patient->id,

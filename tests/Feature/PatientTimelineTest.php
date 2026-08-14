@@ -39,7 +39,7 @@ class PatientTimelineTest extends TestCase
             'consultation_date' => '2026-08-14',
             'consultation_time' => '14:30:00',
         ]);
-        Invoice::create([
+        Invoice::forceCreate([
             'clinic_id' => $clinic->id,
             'patient_id' => $patient->id,
             'medical_document_id' => $current->id,
@@ -47,7 +47,7 @@ class PatientTimelineTest extends TestCase
             'status' => InvoiceStatus::VOID,
             'ncf' => '000-OLD',
         ]);
-        $active = Invoice::create([
+        $active = Invoice::forceCreate([
             'clinic_id' => $clinic->id,
             'patient_id' => $patient->id,
             'medical_document_id' => $current->id,

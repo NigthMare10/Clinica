@@ -31,29 +31,40 @@ class VerificationController extends Controller
             ->when(($filters['period'] ?? 'all') === '7days', fn ($query) => $query->where('verified_at', '>=', $now->subDays(6)->startOfDay()->utc()))
             ->when($filters['method'] ?? null, fn ($query, string $method) => $query->where('method', $method))
             ->when($filters['result'] ?? null, fn ($query, string $result) => $query->where('result', $result));
-        $recent = (clone $base)->where('verified_at', '>=', $now->subDays(6)->startOfDay())->get(['verified_at', 'created_at']);
-        $trend = collect(range(6, 0))->map(function (int $days) use ($recent, $now, $timezone): array {
+        $trendStart = $now->subDays(6)->startOfDay()->utc();
+        $recent = (clone $base)->where('verified_at', '>=', $trendStart)
+            ->selectRaw('DATE(verified_at) as day, COUNT(*) as aggregate')->groupByRaw('DATE(verified_at)')
+            ->pluck('aggregate', 'day');
+        $trend = collect(range(6, 0))->map(function (int $days) use ($recent, $now): array {
             $date = $now->subDays($days);
 
             return [
                 'label' => $date->locale('es')->isoFormat('dd D'),
-                'count' => $recent->filter(fn ($log) => ($log->verified_at ?? $log->created_at)->timezone($timezone)->isSameDay($date))->count(),
+                'count' => (int) ($recent[$date->utc()->toDateString()] ?? 0),
             ];
         });
         $today = $now->startOfDay()->utc();
-        $statsQuery = fn () => (clone $base)->where('verified_at', '>=', $today);
+        $stats = (clone $base)->where('verified_at', '>=', $today)->selectRaw(
+            'COUNT(*) as today,
+            SUM(CASE WHEN method IN (?, ?) THEN 1 ELSE 0 END) as qr,
+            SUM(CASE WHEN method = ? THEN 1 ELSE 0 END) as code,
+            SUM(CASE WHEN method = ? THEN 1 ELSE 0 END) as pdf,
+            SUM(CASE WHEN result = ? THEN 1 ELSE 0 END) as valid,
+            SUM(CASE WHEN result <> ? THEN 1 ELSE 0 END) as failed',
+            ['QR_CAMERA', 'QR_LINK', 'MANUAL_CODE', 'PDF_HASH', 'VALID', 'VALID']
+        )->first();
         $latest = (clone $base)->latest('verified_at')->first();
 
         return Inertia::render('Admin/Verifications/Index', [
             'logs' => (clone $filtered)->with(['document:id,patient_id,public_code,certificate_kind', 'document.patient:id,first_name,last_name'])
                 ->latest('verified_at')->paginate(30)->withQueryString(),
             'stats' => [
-                'today' => $statsQuery()->count(),
-                'qr' => $statsQuery()->whereIn('method', ['QR_CAMERA', 'QR_LINK'])->count(),
-                'code' => $statsQuery()->where('method', 'MANUAL_CODE')->count(),
-                'pdf' => $statsQuery()->where('method', 'PDF_HASH')->count(),
-                'valid' => $statsQuery()->where('result', 'VALID')->count(),
-                'failed' => $statsQuery()->whereNot('result', 'VALID')->count(),
+                'today' => (int) $stats->today,
+                'qr' => (int) $stats->qr,
+                'code' => (int) $stats->code,
+                'pdf' => (int) $stats->pdf,
+                'valid' => (int) $stats->valid,
+                'failed' => (int) $stats->failed,
                 'latest' => ($latest?->verified_at ?? $latest?->created_at)?->timezone($timezone)->toIso8601String(),
             ],
             'trend' => $trend,

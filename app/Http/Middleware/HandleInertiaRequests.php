@@ -39,6 +39,7 @@ class HandleInertiaRequests extends Middleware
                 'status' => fn () => $request->session()->get('status'),
             ],
             'institution' => Arr::except(config('institution'), ['admin']),
+            'build_id' => config('release.id'),
         ];
     }
 }

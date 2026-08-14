@@ -18,15 +18,25 @@ class DashboardController extends Controller
     {
         $documents = MedicalDocument::query()->accessibleTo(request()->user())->when(request()->user()->role === UserRole::DOCTOR,
             fn ($query) => $query->where('doctor_id', request()->user()->doctor?->id));
+        $today = now(config('institution.timezone'))->startOfDay()->utc();
+        $documentCounts = (clone $documents)->selectRaw(
+            'COUNT(*) as documents,
+            SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as documents_today,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_review,
+            SUM(CASE WHEN source_kind = ? THEN 1 ELSE 0 END) as generated,
+            SUM(CASE WHEN certificate_kind = ? THEN 1 ELSE 0 END) as certificates,
+            SUM(CASE WHEN certificate_kind = ? THEN 1 ELSE 0 END) as incapacities',
+            [$today, $today->addDay(), 'REVIEW_REQUIRED', 'GENERATED', 'CONSTANCIA', 'INCAPACIDAD']
+        )->first();
 
         return Inertia::render('Admin/Dashboard', [
             'counts' => [
-                'documents' => (clone $documents)->count(),
-                'documents_today' => (clone $documents)->whereDate('created_at', today())->count(),
-                'pending_review' => (clone $documents)->where('status', 'REVIEW_REQUIRED')->count(),
-                'generated' => (clone $documents)->where('source_kind', 'GENERATED')->count(),
-                'certificates' => (clone $documents)->where('certificate_kind', 'CONSTANCIA')->count(),
-                'incapacities' => (clone $documents)->where('certificate_kind', 'INCAPACIDAD')->count(),
+                'documents' => (int) $documentCounts->documents,
+                'documents_today' => (int) $documentCounts->documents_today,
+                'pending_review' => (int) $documentCounts->pending_review,
+                'generated' => (int) $documentCounts->generated,
+                'certificates' => (int) $documentCounts->certificates,
+                'incapacities' => (int) $documentCounts->incapacities,
                 'verifications' => DocumentVerificationLog::where('successful', true)->count(),
                 'doctors' => Doctor::count(),
                 'patients' => Patient::count(),

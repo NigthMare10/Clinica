@@ -82,10 +82,10 @@ class MedicalDocumentLifecycleSecurityTest extends TestCase
 
     public function test_public_verification_code_endpoint_is_rate_limited(): void
     {
-        foreach (range(1, 10) as $attempt) {
+        foreach (range(1, 30) as $attempt) {
             $this->post('/verificar/codigo', ['code' => 'MISSING-'.$attempt])->assertOk();
         }
-        $this->post('/verificar/codigo', ['code' => 'MISSING-11'])->assertTooManyRequests();
+        $this->post('/verificar/codigo', ['code' => 'MISSING-31'])->assertTooManyRequests();
     }
 
     public function test_doctor_document_index_is_scoped_to_own_records(): void

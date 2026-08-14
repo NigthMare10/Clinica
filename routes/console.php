@@ -17,6 +17,8 @@ use App\Services\MedicalDocuments\PdfToolAvailabilityService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schedule;
 use Symfony\Component\Process\Process;
 
 Artisan::command('inspire', function () {
@@ -161,3 +163,42 @@ Artisan::command('clinic:diagnose', function (): int {
 
     return $failed ? 1 : 0;
 })->purpose('Verify the local PHP temporary and process runtime');
+
+Artisan::command('clinic:cleanup-temporary-files {--dry-run : List stale temporary entries without deleting them} {--hours=24 : Minimum age in hours}', function (): int {
+    $cutoff = now()->subHours(max(1, (int) $this->option('hours')))->getTimestamp();
+    $roots = [
+        storage_path('app/tmp'),
+        storage_path('app/private/tmp'),
+        storage_path('runtime/tmp'),
+        storage_path('runtime/uploads'),
+        storage_path('runtime/process'),
+    ];
+    $removed = 0;
+
+    foreach ($roots as $root) {
+        if (! is_dir($root)) {
+            continue;
+        }
+        $rootPath = realpath($root);
+        foreach (File::allFiles($root) as $file) {
+            $path = $file->getRealPath();
+            if ($file->getFilename()[0] === '.' || $path === false || $rootPath === false || ! str_starts_with($path, $rootPath.DIRECTORY_SEPARATOR) || $file->getMTime() > $cutoff) {
+                continue;
+            }
+            $this->line(($this->option('dry-run') ? 'WOULD_DELETE ' : 'DELETE ').str_replace(storage_path().DIRECTORY_SEPARATOR, '', $path));
+            if (! $this->option('dry-run')) {
+                File::delete($path);
+            }
+            $removed++;
+        }
+        if (! $this->option('dry-run')) {
+            collect(File::directories($root))->sortByDesc(fn (string $path) => substr_count($path, DIRECTORY_SEPARATOR))->each(fn (string $path) => File::isEmptyDirectory($path) ? File::deleteDirectory($path) : null);
+        }
+    }
+
+    $this->info(($this->option('dry-run') ? 'Dry run: ' : 'Cleanup: ').$removed.' stale temporary file(s).');
+
+    return 0;
+})->purpose('Safely remove stale files only from Clinic temporary directories');
+
+Schedule::command('clinic:cleanup-temporary-files')->dailyAt('03:20')->withoutOverlapping();

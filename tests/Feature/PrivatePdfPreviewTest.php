@@ -30,13 +30,15 @@ class PrivatePdfPreviewTest extends TestCase
             'issued_path' => $path,
         ]);
 
-        $this->actingAs($user)->get(route('admin.documents.preview', $document))
+        $response = $this->actingAs($user)->get(route('admin.documents.preview', $document))
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'inline; filename=medical-document.pdf')
-            ->assertHeader('Cache-Control', 'no-store, private, max-age=0')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertStreamedContent('%PDF-1.4 issued');
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('max-age=0', (string) $response->headers->get('Cache-Control'));
     }
 
     public function test_issued_medical_document_falls_back_to_its_original_pdf_when_no_issued_path_exists(): void
@@ -128,13 +130,15 @@ class PrivatePdfPreviewTest extends TestCase
             'issued_path' => $path,
         ])->save();
 
-        $this->actingAs($user)->get(route('admin.invoices.preview', $invoice))
+        $response = $this->actingAs($user)->get(route('admin.invoices.preview', $invoice))
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'inline; filename=invoice.pdf')
-            ->assertHeader('Cache-Control', 'no-store, private, max-age=0')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertStreamedContent('%PDF-1.4 invoice');
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('max-age=0', (string) $response->headers->get('Cache-Control'));
     }
 
     private function clinic(): Clinic

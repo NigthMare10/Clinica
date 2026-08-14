@@ -52,7 +52,7 @@ class InvoiceMedicalDocumentSnapshotService
                 ->whereIn('medical_document_id', $linkedDocumentIds)
                 ->where('status', InvoiceStatus::DRAFT)
                 ->lockForUpdate()
-                ->each(function (Invoice $invoice) use ($snapshot, $document, $user, $auditContext, &$count): void {
+                ->each(function (Invoice $invoice) use ($snapshot, $document, $user, $auditContext, $linkedDocumentIds, &$count): void {
                     $invoice->forceFill($snapshot);
                     if ($document->reissue_of_id && $invoice->medical_document_id === $document->reissue_of_id) {
                         $invoice->medical_document_id = $document->id;

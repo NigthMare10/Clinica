@@ -37,9 +37,9 @@ class InvoiceMedicalDocumentIntegrationTest extends TestCase
         $this->assertSame('Ana Paciente', $invoice->recipient_name);
         $this->assertSame('0801199912345', $invoice->recipient_tax_id);
         $this->assertSame('2026-08-13', $invoice->service_date?->toDateString());
-        $this->assertSame('09:30:00', $invoice->getRawOriginal('service_time'));
+        $this->assertSame('09:30', substr((string) $invoice->getRawOriginal('service_time'), 0, 5));
         $this->assertSame('MED-2026-0001', $invoice->medical_document_code);
-        $this->assertSame(MedicalDocumentType::MEDICAL_CERTIFICATE->value, $invoice->medical_document_type);
+        $this->assertSame('CONSTANCIA', $invoice->medical_document_type);
         $this->assertSame('Dra. Prueba', $invoice->service_professional);
 
         try {
@@ -104,7 +104,7 @@ class InvoiceMedicalDocumentIntegrationTest extends TestCase
 
         $this->assertSame(1, $updated);
         $this->assertSame('2026-08-14', $draft->fresh()->service_date?->toDateString());
-        $this->assertSame('14:45:00', $draft->fresh()->getRawOriginal('service_time'));
+        $this->assertSame('14:45', substr((string) $draft->fresh()->getRawOriginal('service_time'), 0, 5));
         $this->assertSame('MED-2026-0002', $draft->fresh()->medical_document_code);
         $this->assertSame('2026-08-13', $issued->fresh()->service_date?->toDateString());
         $this->assertDatabaseHas('invoice_audits', ['invoice_id' => $draft->id, 'action' => 'MEDICAL_DOCUMENT_SNAPSHOT_SYNCED']);

@@ -1,15 +1,27 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
-import { fixture, signIn } from './fixtures';
+import { fixture } from './fixtures';
 
 test('public routes and Spanish verification lookup are live', async ({ page }) => {
-    for (const url of ['/', '/especialidades', '/clinica', '/clinicas', '/verificar', '/login']) {
+    for (const url of ['/', '/especialidades', '/clinica', '/clinicas', '/contacto', '/verificar', '/login']) {
         const response = await page.goto(url);
         expect(response?.status(), url).toBeLessThan(400);
     }
     await page.goto('/verificar');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex,nofollow');
     await expect(page.getByRole('heading', { name: 'Verifique un documento médico.' })).toBeVisible();
+});
+
+test('/clinica renders its complete Vue experience without runtime errors', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    await page.goto('/clinica');
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('h1')).not.toBeEmpty();
+    await expect(page.getByRole('link', { name: /Contactar ahora/i })).toBeVisible();
+    await expect(page.locator('footer')).toBeVisible();
+    expect(errors).toEqual([]);
 });
 
 test('unknown verification code returns a deterministic not-found result', async ({ page }) => {
@@ -54,13 +66,13 @@ test('verification accepts a fictitious issued PDF and rejects a different PDF',
     await expect(page.getByRole('heading', { name: 'Documento no encontrado' })).toBeVisible();
 });
 
-test('Honduras fallback stays useful when map tiles are unavailable', async ({ page }) => {
-    await page.route('https://**.tile.openstreetmap.org/**', route => route.abort());
+test('local Honduras map is usable without a third-party provider', async ({ page }) => {
     await page.goto('/clinicas');
     await expect(page.getByAltText('Mapa geográfico local de Honduras con 18 puntos departamentales')).toBeVisible();
     await expect(page.locator('.network-map-fallback button')).toHaveCount(18);
     await page.locator('.network-map-fallback button').first().click();
     await expect(page.locator('.department-list--cards article.is-selected')).toHaveCount(1);
+    await expect(page.locator('.map-selection')).not.toContainText('Seleccione un marcador');
 });
 
 test('invalid token shape is a real 404', async ({ request }) => {

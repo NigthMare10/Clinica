@@ -14,7 +14,6 @@ use App\Policies\InvoicePolicy;
 use App\Policies\PatientPolicy;
 use App\Policies\ReferenceResourcePolicy;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -39,6 +38,5 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Doctor::class, ReferenceResourcePolicy::class);
         Gate::policy(Patient::class, PatientPolicy::class);
         Gate::policy(Invoice::class, InvoicePolicy::class);
-        Vite::prefetch(concurrency: 3);
     }
 }

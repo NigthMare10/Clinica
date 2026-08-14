@@ -114,6 +114,8 @@ useScrollReveal();
                 <div class="clinic-gallery__grid" data-reveal>
                     <img
                         src="/images/photography/clinic-reception-1280.webp"
+                        srcset="/images/photography/clinic-reception-640.webp 640w, /images/photography/clinic-reception-1280.webp 1280w"
+                        sizes="(max-width: 760px) 100vw, 50vw"
                         width="1280"
                         height="960"
                         alt="Recepción hospitalaria moderna"
@@ -121,6 +123,8 @@ useScrollReveal();
                         decoding="async"
                     /><img
                         src="/images/photography/female-doctor-consultation-640.webp"
+                        srcset="/images/photography/female-doctor-consultation-640.webp 640w, /images/photography/female-doctor-consultation-1280.webp 1280w"
+                        sizes="(max-width: 760px) 100vw, 35vw"
                         width="640"
                         height="474"
                         alt="Doctora atendiendo a una paciente"
@@ -128,6 +132,8 @@ useScrollReveal();
                         decoding="async"
                     /><img
                         src="/images/photography/patient-assistance-640.webp"
+                        srcset="/images/photography/patient-assistance-640.webp 640w, /images/photography/patient-assistance-1280.webp 1280w"
+                        sizes="(max-width: 760px) 100vw, 35vw"
                         width="640"
                         height="427"
                         alt="Asistencia clínica profesional"

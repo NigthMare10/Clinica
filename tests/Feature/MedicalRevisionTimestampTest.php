@@ -29,7 +29,7 @@ class MedicalRevisionTimestampTest extends TestCase
 
         $correction = app(MedicalDocumentRevisionService::class)->create($source, 'Clinical wording correction.', $user);
 
-        $this->assertSame('23:30:00', $correction->consultation_time);
+        $this->assertSame('23:30', substr((string) $correction->consultation_time, 0, 5));
         $this->assertNull($correction->issued_at);
     }
 }

@@ -848,8 +848,11 @@ body {
 .network-map-shell{position:relative;background:#dff5f7}
 .network-map-fallback{z-index:1}
 .network-map-fallback img,.mini-map-fallback{object-fit:contain;background:#dff5f7}
-.network-map-fallback button{width:16px;height:16px;transition:transform .2s,background .2s}
-.network-map-fallback button:hover,.network-map-fallback button:focus-visible,.network-map-fallback button.selected{z-index:3;outline:3px solid rgba(25,192,208,.3);outline-offset:3px;background:#19c0d0;transform:translate(-50%,-50%) scale(1.45)}
+.network-map-fallback button{width:44px;height:44px;padding:0;border:0;background:transparent;box-shadow:none;transition:transform .2s}
+.network-map-fallback button:after{display:block;width:16px;height:16px;margin:auto;border:3px solid #fff;border-radius:50%;background:#0b789b;box-shadow:0 2px 9px rgba(8,38,58,.35);content:""}
+.network-map-fallback button:hover,.network-map-fallback button:focus-visible,.network-map-fallback button.selected{z-index:3;outline:3px solid rgba(25,192,208,.3);outline-offset:1px;transform:translate(-50%,-50%) scale(1.12)}
+.network-map-fallback button:hover:after,.network-map-fallback button:focus-visible:after,.network-map-fallback button.selected:after{background:#19c0d0}
+.map-selection{min-height:44px;margin:0;padding:12px 20px;background:#edfafa;color:#08647d;font-size:.72rem;font-weight:700}
 .network-map{z-index:2;pointer-events:none}
 .network-map.ready{pointer-events:auto}
 .mini-map{pointer-events:none}

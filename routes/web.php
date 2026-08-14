@@ -28,16 +28,17 @@ Route::get('/especialidades', [PublicSiteController::class, 'specialties'])->nam
 Route::get('/especialidades/{specialty:slug}', [PublicSiteController::class, 'specialty'])->name('public.specialties.show');
 Route::get('/clinica', fn (PublicSiteController $controller) => $controller->page('clinica', 'Public/Clinic'))->name('public.clinic');
 Route::get('/clinicas', [PublicSiteController::class, 'clinics'])->name('public.clinics.index');
+Route::get('/contacto', fn (PublicSiteController $controller) => $controller->page('contacto', 'Public/Contact'))->name('public.contact');
 
 Route::middleware('noindex')->prefix('verificar')->name('public.verify.')->group(function () {
     Route::get('/', [PublicVerificationController::class, 'lookup'])->name('lookup');
-    Route::get('/{token}', [PublicVerificationController::class, 'token'])->middleware('throttle:30,1')->name('token');
-    Route::post('/codigo', [PublicVerificationController::class, 'code'])->middleware('throttle:10,1')->name('code');
-    Route::post('/archivo', [PublicVerificationController::class, 'file'])->middleware('throttle:3,1')->name('file');
+    Route::get('/{token}', [PublicVerificationController::class, 'token'])->middleware('throttle:60,1')->name('token');
+    Route::post('/codigo', [PublicVerificationController::class, 'code'])->middleware('throttle:30,1')->name('code');
+    Route::post('/archivo', [PublicVerificationController::class, 'file'])->middleware('throttle:10,1')->name('file');
 });
 
 Route::get('/verificar/factura/{token}', PublicInvoiceVerificationController::class)
-    ->middleware(['noindex', 'throttle:30,1'])->name('public.invoice.verify');
+    ->middleware(['noindex', 'throttle:60,1'])->name('public.invoice.verify');
 
 Route::middleware(['auth', 'verified', 'role:SUPER_ADMIN,ADMINISTRATOR,DOCTOR,DOCUMENT_OPERATOR,AUDITOR', 'noindex'])
     ->prefix('admin')->name('admin.')->group(function () {

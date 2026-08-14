@@ -44,7 +44,7 @@ class MedicalDocumentController extends Controller
                 ->orWhere('original_filename', 'like', "%$search%")
                 ->orWhereHas('patient', fn ($patient) => $patient->where('first_name', 'like', "%$search%")->orWhere('last_name', 'like', "%$search%"))))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
-            ->latest()->paginate(25)->withQueryString();
+            ->latest()->paginate(25, ['id', 'patient_id', 'doctor_id', 'type', 'certificate_kind', 'source_kind', 'status', 'public_code', 'original_filename', 'created_at'])->withQueryString();
 
         return Inertia::render('Admin/Documents/Index', ['documents' => $documents, 'filters' => $request->only('search', 'status')]);
     }

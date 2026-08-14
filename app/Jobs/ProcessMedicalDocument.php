@@ -24,6 +24,12 @@ class ProcessMedicalDocument implements ShouldQueue
 
     public int $tries = 2;
 
+    public int $timeout = 300;
+
+    public int $backoff = 30;
+
+    public bool $failOnTimeout = true;
+
     public function __construct(public string $documentId) {}
 
     public function handle(PdfTextExtractionService $textService, PdfOcrService $ocr, MedicalDocumentParser $parser,

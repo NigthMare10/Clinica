@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
     testDir: './tests/e2e',
+    testIgnore: process.env.E2E_BASE_URL ? [] : ['**/production-*.spec.ts'],
     globalSetup: './tests/e2e/global-setup.ts',
     fullyParallel: false,
     timeout: 90_000,

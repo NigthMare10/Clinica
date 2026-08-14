@@ -15,8 +15,8 @@ let mapLoading: Promise<void> | undefined;
 let destroyed = false;
 
 const specialtyImage = (specialty: Specialty) => specialty.image_path || '/images/photography/female-doctor-consultation-1280.webp';
-const responsiveSet = (path: string) => `${path.replace('-1280.webp', '-640.webp')} 640w, ${path} 1280w`;
-const imageFallback = (event: Event) => { (event.target as HTMLImageElement).src = '/images/photography/female-doctor-consultation-1280.webp'; };
+const responsiveSet = (path: string) => path.endsWith('-1280.webp') ? `${path.replace('-1280.webp', '-640.webp')} 640w, ${path} 1280w` : undefined;
+const imageFallback = (event: Event) => { const image = event.target as HTMLImageElement; image.removeAttribute('srcset'); image.src = '/images/photography/female-doctor-consultation-1280.webp'; };
 
 useScrollReveal();
 const initializeMap = async () => {

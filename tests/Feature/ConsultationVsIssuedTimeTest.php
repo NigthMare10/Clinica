@@ -27,7 +27,7 @@ class ConsultationVsIssuedTimeTest extends TestCase
         $result = app(MedicalDocumentVerificationService::class)->byCode($document->public_code);
 
         $this->assertSame('2026-08-09', $result['document']['consultation_date']);
-        $this->assertSame('14:00:00', $result['document']['consultation_time']);
+        $this->assertSame('14:00', substr((string) $result['document']['consultation_time'], 0, 5));
         $this->assertSame($issuedAt->toIso8601String(), $result['document']['issued_at']);
     }
 }

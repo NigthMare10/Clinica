@@ -8,7 +8,7 @@ import type { Paginated, Specialty } from '@/types';
 
 defineProps<{ specialties: Paginated<Specialty> }>();
 const image = (specialty: Specialty) => specialty.image_path || '/images/photography/female-doctor-consultation-1280.webp';
-const responsiveSet = (path: string) => `${path.replace('-1280.webp', '-640.webp')} 640w, ${path} 1280w`;
+const responsiveSet = (path: string) => path.endsWith('-1280.webp') ? `${path.replace('-1280.webp', '-640.webp')} 640w, ${path} 1280w` : undefined;
 useScrollReveal();
 </script>
 

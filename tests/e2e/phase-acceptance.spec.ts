@@ -26,17 +26,17 @@ test('captures public photographic pages and geographic fallback', async ({ page
     await page.screenshot({ path: path.join(artifacts, 'verification-lookup.png'), fullPage: true });
 });
 
-test('analyzes text, generates a draft and issues an encrypted one-page incapacity', async ({ page }) => {
+test('analyzes text, previews a constancia and issues an encrypted one-page incapacity', async ({ page }) => {
     await signIn(page);
     await page.goto('/admin/documents/generate/constancia');
     await expect(page.getByRole('heading', { name: 'Nueva constancia' }).first()).toBeVisible();
     await page.getByLabel(/Pegue aquí el contenido/).fill(incapacity);
     await page.getByRole('button', { name: 'ANALIZAR TEXTO' }).click();
     await expect(page.getByText(/% detectado/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Generar borrador' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Vista previa' }).last()).toBeEnabled();
     await page.screenshot({ path: path.join(artifacts, 'text-analysis.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Generar borrador' }).click();
-    await expect(page).toHaveURL(/\/admin\/documents\/.+\/review/);
+    await page.getByRole('button', { name: 'Vista previa' }).last().click();
+    await expect(page.locator('.certificate-preview')).toBeVisible();
 
     await page.goto('/admin/documents/generate/incapacidad');
     await expect(page.getByRole('heading', { name: 'Nueva incapacidad' }).first()).toBeVisible();
