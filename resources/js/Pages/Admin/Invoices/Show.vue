@@ -39,7 +39,7 @@ const serviceDate = (value?: string | null) =>
         ? new Intl.DateTimeFormat("es-HN", {
               dateStyle: "long",
               timeZone: "UTC",
-          }).format(new Date(`${value}T12:00:00Z`))
+          }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`))
         : "No registrada";
 const serviceTime = (value?: string | null) => {
     if (!value) return "No registrada";
