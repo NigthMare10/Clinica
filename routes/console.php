@@ -180,7 +180,7 @@ Artisan::command('clinic:cleanup-temporary-files {--dry-run : List stale tempora
             continue;
         }
         $rootPath = realpath($root);
-        foreach (File::allFiles($root) as $file) {
+        foreach (File::allFiles($rootPath) as $file) {
             $path = $file->getRealPath();
             if ($file->getFilename()[0] === '.' || $path === false || $rootPath === false || ! str_starts_with($path, $rootPath.DIRECTORY_SEPARATOR) || $file->getMTime() > $cutoff) {
                 continue;
