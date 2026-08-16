@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Run on Clinic only. The release must already contain a complete public/build.
-root="${1:?Usage: deploy-clinic-release.sh <clinic-root> <release-id>}"
+root="$(cd "${1:?Usage: deploy-clinic-release.sh <clinic-root> <release-id>}" && pwd -P)"
 release_id="${2:?Usage: deploy-clinic-release.sh <clinic-root> <release-id>}"
 release="$root/releases/$release_id"
 php_bin="${PHP_BIN:-/opt/alt/php84/usr/bin/php}"
