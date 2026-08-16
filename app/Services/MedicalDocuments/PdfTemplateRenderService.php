@@ -17,7 +17,7 @@ class PdfTemplateRenderService
         $pdf->SetAutoPageBreak(false);
         $this->addPage($pdf, $clinic);
 
-        $patientName = trim($patient->first_name.' '.$patient->last_name);
+        $patientName = trim((string) ($fields['patient_name'] ?? trim($patient->first_name.' '.$patient->last_name)));
         $age = $fields['age_at_consultation'] ?? $patient->age;
         $date = $this->date($fields['consultation_date']);
         $time = $this->time($fields['consultation_time'] ?? null);

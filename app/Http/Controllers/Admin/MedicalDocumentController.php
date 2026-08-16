@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CorrectMedicalDocumentRequest;
 use App\Http\Requests\ReviewMedicalDocumentRequest;
 use App\Http\Requests\StoreMedicalDocumentRequest;
+use App\Http\Requests\UpdateIssuedMedicalDocumentRequest;
 use App\Jobs\ProcessMedicalDocument;
 use App\Models\DocumentVersion;
 use App\Models\Invoice;
@@ -23,8 +24,10 @@ use App\Services\MedicalDocuments\MedicalDocumentConsistencyService;
 use App\Services\MedicalDocuments\MedicalDocumentIssueService;
 use App\Services\MedicalDocuments\MedicalDocumentRevisionRenderService;
 use App\Services\MedicalDocuments\MedicalDocumentRevisionService;
+use App\Services\MedicalDocuments\MedicalTextExtractionService;
 use App\Support\InstitutionalMedicalProvider;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -132,6 +135,121 @@ class MedicalDocumentController extends Controller
             'doctors' => [app(InstitutionalMedicalProvider::class)->doctor()],
             'patients' => Patient::orderBy('last_name')->get(),
         ]);
+    }
+
+    public function edit(Request $request, MedicalDocument $document): Response
+    {
+        $this->authorize('correct', $document);
+        abort_unless(in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true), 422);
+
+        $document->load(['patient', 'clinic', 'revision']);
+        $fields = $document->confirmed_fields ?? [];
+        $revisionFields = $document->revision?->current_snapshot['confirmed_fields'] ?? [];
+        $sourceText = $revisionFields['free_text'] ?? $fields['source_text'] ?? $fields['free_text'] ?? $document->medical_reason ?? '';
+        $invoices = $request->user()->can('viewAny', Invoice::class) ? $document->invoices()->latest()->get(['id', 'status', 'ncf']) : collect();
+
+        return Inertia::render('Admin/Documents/Edit', [
+            'document' => $document,
+            'previewUrl' => route('admin.documents.preview', $document),
+            'sourceText' => $sourceText,
+            'fields' => [
+                'patient_name' => trim($document->patient?->first_name.' '.$document->patient?->last_name),
+                'identity' => $document->patient?->document_number,
+                'age_at_consultation' => $document->age_at_consultation ?? $document->patient?->age,
+                'consultation_date' => $document->consultation_date?->format('d/m/Y'),
+                'consultation_time' => $document->consultation_time ? substr($document->consultation_time, 0, 5) : null,
+                'diagnosis' => $document->diagnosis ?? $fields['diagnosis'] ?? null,
+                'leave_days' => $document->leave_days ?? $fields['leave_days'] ?? null,
+                'leave_start_date' => $document->leave_start_date?->format('d/m/Y'),
+                'leave_end_date' => $document->leave_end_date?->format('d/m/Y'),
+                'recommendations' => $document->recommendations ?? $fields['recommendations'] ?? null,
+            ],
+            'currentRevisionId' => $document->id,
+            'invoice' => $invoices->first(fn (Invoice $invoice) => $invoice->status === InvoiceStatus::ISSUED) ?? $invoices->first(),
+        ]);
+    }
+
+    public function analyzeEdit(Request $request, MedicalDocument $document, MedicalTextExtractionService $extractor): JsonResponse
+    {
+        $this->authorize('correct', $document);
+        $data = $request->validate(['source_text' => ['required', 'string', 'max:12000'], 'fields' => ['required', 'array']]);
+        $analysis = $extractor->extract($data['source_text'], strtolower((string) ($document->certificate_kind ?: 'constancia')));
+        $mapped = [
+            'patient_name' => $analysis['fields']['patient_name'], 'identity' => $analysis['fields']['identity'],
+            'age_at_consultation' => $analysis['fields']['age'], 'consultation_date' => $this->displayDate($analysis['fields']['consultation_date']),
+            'consultation_time' => $analysis['fields']['consultation_time'], 'diagnosis' => $analysis['fields']['diagnosis'],
+            'leave_days' => $analysis['fields']['leave_days'], 'leave_start_date' => $this->displayDate($analysis['fields']['leave_start_date']),
+            'leave_end_date' => $this->displayDate($analysis['fields']['leave_end_date']), 'recommendations' => $analysis['fields']['recommendations'],
+        ];
+        $changes = collect($mapped)->filter(fn ($value, $field) => $value !== null && (string) $value !== (string) ($data['fields'][$field] ?? null))
+            ->map(fn ($value, $field) => ['field' => $field, 'before' => $data['fields'][$field] ?? null, 'after' => $value])->values();
+
+        return response()->json(['fields' => $mapped, 'changes' => $changes]);
+    }
+
+    public function previewEdit(Request $request, MedicalDocument $document, MedicalDocumentRevisionRenderService $renderer)
+    {
+        $this->authorize('correct', $document);
+        $data = $request->validate(['source_text' => ['required', 'string', 'max:12000'], 'fields' => ['required', 'array']]);
+
+        return response($renderer->preview($document, [...$data['fields'], 'source_text' => $data['source_text']]), 200, [
+            'Content-Type' => 'application/pdf', 'Cache-Control' => 'no-store, private, max-age=0', 'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function updateIssued(UpdateIssuedMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentRevisionService $revisions,
+        MedicalDocumentRevisionRenderService $renderer, MedicalDocumentIssueService $issuer, InvoiceMedicalDocumentSnapshotService $invoices): RedirectResponse
+    {
+        $data = $request->validated();
+        abort_unless($data['current_revision_id'] === $document->id, 409, 'Este documento fue actualizado en otra sesión. Recarga antes de guardar.');
+        try {
+            $copy = $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
+            $fields = $data['fields'];
+            $dates = ['consultation_date', 'leave_start_date', 'leave_end_date'];
+            foreach ($dates as $field) {
+                if (! empty($fields[$field])) {
+                    $fields[$field] = \Carbon\CarbonImmutable::createFromFormat('d/m/Y', $fields[$field])->toDateString();
+                }
+            }
+            [$firstName, $lastName] = $this->splitName($fields['patient_name']);
+            $patient = $copy->patient;
+            $patientData = ['first_name' => $firstName, 'last_name' => $lastName, 'age' => $fields['age_at_consultation'] ?? null];
+            if (! empty($fields['identity'])) {
+                $patientData['document_number'] = preg_replace('/\D+/', '', $fields['identity']);
+            }
+            $patient->fill($patientData)->save();
+            $confirmed = array_replace($copy->confirmed_fields ?? [], $fields, ['free_text' => $data['source_text'], 'source_text' => $data['source_text']]);
+            $copy->fill([
+                'age_at_consultation' => $fields['age_at_consultation'] ?? null, 'consultation_date' => $fields['consultation_date'] ?? null,
+                'consultation_time' => $fields['consultation_time'] ?? null, 'diagnosis' => $fields['diagnosis'] ?? null,
+                'leave_days' => $fields['leave_days'] ?? null, 'leave_start_date' => $fields['leave_start_date'] ?? null,
+                'leave_end_date' => $fields['leave_end_date'] ?? null, 'recommendations' => $fields['recommendations'] ?? null,
+                'medical_reason' => $data['source_text'], 'confirmed_fields' => $confirmed,
+            ])->save();
+            $renderer->regenerate($copy);
+            $copy->forceFill(['inconsistencies' => [], 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'status' => MedicalDocumentStatus::READY])->save();
+            $issued = $issuer->issue($copy, $request->user());
+            $invoices->synchronizeDrafts($issued, $request->user(), ['ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors(['source_text' => 'No fue posible regenerar el documento. La versión anterior continúa vigente.']);
+        }
+
+        return redirect()->route('admin.documents.edit', $issued)->with('status', 'DOCUMENTO ACTUALIZADO');
+    }
+
+    private function displayDate(?string $date): ?string
+    {
+        return $date ? \Carbon\CarbonImmutable::parse($date)->format('d/m/Y') : null;
+    }
+
+    private function splitName(string $name): array
+    {
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        $middle = max(1, (int) ceil(count($parts) / 2));
+
+        return [implode(' ', array_slice($parts, 0, $middle)), implode(' ', array_slice($parts, $middle)) ?: 'No indicado'];
     }
 
     public function confirm(ReviewMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentAuditService $audit, MedicalDocumentConsistencyService $consistency, MedicalDocumentRevisionRenderService $revisionRenderer, InvoiceMedicalDocumentSnapshotService $invoiceSnapshots): RedirectResponse

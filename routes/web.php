@@ -58,7 +58,10 @@ Route::middleware(['auth', 'verified', 'role:SUPER_ADMIN,ADMINISTRATOR,DOCTOR,DO
         Route::post('/documents/generate/{kind}', [GeneratedMedicalDocumentController::class, 'store'])->name('documents.generate.store');
         Route::post('/documents', [MedicalDocumentController::class, 'store'])->name('documents.store');
         Route::get('/documents/{document}/review', [MedicalDocumentController::class, 'review'])->name('documents.review');
-        Route::get('/documents/{document}/edit', [MedicalDocumentController::class, 'review'])->name('documents.edit');
+        Route::get('/documents/{document}/edit', [MedicalDocumentController::class, 'edit'])->name('documents.edit');
+        Route::post('/documents/{document}/edit/analyze', [MedicalDocumentController::class, 'analyzeEdit'])->name('documents.edit.analyze');
+        Route::post('/documents/{document}/edit/preview', [MedicalDocumentController::class, 'previewEdit'])->name('documents.edit.preview');
+        Route::patch('/documents/{document}', [MedicalDocumentController::class, 'updateIssued'])->name('documents.update');
         Route::put('/documents/{document}/review', [MedicalDocumentController::class, 'confirm'])->name('documents.confirm');
         Route::post('/documents/{document}/issue', [MedicalDocumentController::class, 'issue'])->name('documents.issue');
         Route::post('/documents/{document}/revoke', [MedicalDocumentController::class, 'revoke'])->name('documents.revoke');

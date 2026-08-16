@@ -111,7 +111,9 @@ class E2ESeeder extends Seeder
             'replaced' => rtrim(strtr(base64_encode(str_repeat("\x33", 32)), '+/', '-_'), '='),
             'identity' => rtrim(strtr(base64_encode(str_repeat("\x44", 32)), '+/', '-_'), '='),
         ];
-        $valid = $this->issued('20000000-0000-4000-8000-000000000007', $base, $admin, $tokens['valid'], 'CSA-2026-E2E1-VALID', $hash);
+        $valid = $this->issued('20000000-0000-4000-8000-000000000007', $base, $admin, $tokens['valid'], 'CSA-2026-E2E1-VALID', $hash,
+            MedicalDocumentStatus::ISSUED, ['consultation_date' => '2026-08-10', 'consultation_time' => '11:00', 'age_at_consultation' => 27,
+                'confirmed_fields' => ['free_text' => 'Por medio de la presente se hace constar que la paciente ficticia fue atendida en consulta médica.']]);
         $this->issued('20000000-0000-4000-8000-000000000008', $base, $admin, $tokens['revoked'], 'CSA-2026-E2E2-REVO', null,
             MedicalDocumentStatus::REVOKED, ['revoked_at' => now(), 'revoked_by' => $admin->id,
                 'revocation_reason' => 'Revocacion ficticia E2E']);
@@ -125,7 +127,7 @@ class E2ESeeder extends Seeder
             'E2E_TEMPLATE_ID' => $template->id, 'E2E_SITE_PAGE_ID' => $page->id, 'E2E_SETTING_ID' => $setting->id,
             'E2E_IDENTITY_SETTING_ID' => $identitySetting->id,
             'E2E_REVIEW_DOCUMENT_ID' => $review->id, 'E2E_CONFLICT_DOCUMENT_ID' => $conflict->id,
-            'E2E_APPROVABLE_DOCUMENT_ID' => $approvable->id, 'E2E_READY_DOCUMENT_ID' => $ready->id,
+            'E2E_APPROVABLE_DOCUMENT_ID' => $approvable->id, 'E2E_READY_DOCUMENT_ID' => $ready->id, 'E2E_VALID_DOCUMENT_ID' => $valid->id,
             'E2E_VALID_TOKEN' => $tokens['valid'], 'E2E_REVOKED_TOKEN' => $tokens['revoked'],
             'E2E_REPLACED_TOKEN' => $tokens['replaced'], 'E2E_UPLOAD_PDF_PATH' => $fixture,
             'E2E_IDENTITY_TOKEN' => $tokens['identity'],

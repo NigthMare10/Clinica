@@ -16,7 +16,7 @@ class MedicalDocumentRevisionRenderService
 
     public function regenerate(MedicalDocument $document): void
     {
-        if (! $document->reissue_of_id || $document->source_kind !== 'GENERATED') {
+        if (! $document->reissue_of_id) {
             return;
         }
 
@@ -54,6 +54,29 @@ class MedicalDocumentRevisionRenderService
         } catch (\Throwable $exception) {
             Storage::disk(config('medical_documents.disk'))->delete($path);
             throw $exception;
+        } finally {
+            @unlink($temporary);
+        }
+    }
+
+    /** Render an unsaved edit without creating a document version or touching private storage. */
+    public function preview(MedicalDocument $document, array $fields): string
+    {
+        $document->loadMissing(['patient', 'doctor', 'clinic', 'template']);
+        $directory = storage_path('app/private/tmp');
+        if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
+            throw new \RuntimeException('Unable to prepare document preview.');
+        }
+        $temporary = tempnam($directory, 'csa-preview-');
+        if ($temporary === false) {
+            throw new \RuntimeException('Unable to prepare document preview.');
+        }
+
+        try {
+            $this->renderer->render(strtolower((string) ($document->certificate_kind ?: 'constancia')), $document->patient,
+                $document->doctor, $document->clinic, $fields + ['free_text' => $fields['source_text'] ?? ''], $temporary, $document->template);
+
+            return (string) file_get_contents($temporary);
         } finally {
             @unlink($temporary);
         }
