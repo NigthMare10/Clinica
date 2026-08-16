@@ -20,7 +20,8 @@ class PdfTemplateRenderService
         $patientName = trim($patient->first_name.' '.$patient->last_name);
         $age = $fields['age_at_consultation'] ?? $patient->age;
         $date = $this->date($fields['consultation_date']);
-        $this->patientBand($pdf, $patientName, $age, $date);
+        $time = $this->time($fields['consultation_time'] ?? null);
+        $this->patientBand($pdf, $patientName, $age, $date, $time);
 
         $pdf->SetY(73);
         $pdf->SetTextColor(10, 45, 76);
@@ -85,7 +86,7 @@ class PdfTemplateRenderService
         $pdf->SetY(50);
     }
 
-    private function patientBand(Fpdi $pdf, string $name, mixed $age, string $date): void
+    private function patientBand(Fpdi $pdf, string $name, mixed $age, string $date, string $time): void
     {
         $y = $pdf->GetY();
         $pdf->SetFillColor(247, 251, 254);
@@ -94,15 +95,17 @@ class PdfTemplateRenderService
         $pdf->SetXY(28, $y + 2.5);
         $pdf->SetTextColor(11, 101, 164);
         $pdf->SetFont('Helvetica', 'B', 7.5);
-        $pdf->Cell(83, 3.5, 'PACIENTE:', 0, 0);
-        $pdf->Cell(32, 3.5, 'EDAD:', 0, 0);
-        $pdf->Cell(45, 3.5, 'FECHA:', 0, 1);
+        $pdf->Cell(70, 3.5, 'PACIENTE:', 0, 0);
+        $pdf->Cell(26, 3.5, 'EDAD:', 0, 0);
+        $pdf->Cell(44, 3.5, 'FECHA DE CONSULTA:', 0, 0);
+        $pdf->Cell(20, 3.5, 'HORA:', 0, 1);
         $pdf->SetX(28);
         $pdf->SetTextColor(10, 45, 76);
         $pdf->SetFont('Helvetica', 'B', 8.7);
-        $pdf->Cell(83, 5.5, $this->text($name), 0, 0);
-        $pdf->Cell(32, 5.5, $this->text($age !== null ? $age.' AÑOS' : 'NO INDICADA'), 0, 0);
-        $pdf->Cell(45, 5.5, $this->text($date), 0, 1);
+        $pdf->Cell(70, 5.5, $this->text($name), 0, 0);
+        $pdf->Cell(26, 5.5, $this->text($age !== null ? $age.' AÑOS' : 'NO INDICADA'), 0, 0);
+        $pdf->Cell(44, 5.5, $this->text($date), 0, 0);
+        $pdf->Cell(20, 5.5, $this->text($time), 0, 1);
         $pdf->SetY($y + 17);
     }
 
@@ -182,6 +185,18 @@ class PdfTemplateRenderService
         $parts = explode('-', $date);
 
         return count($parts) === 3 ? $parts[2].'/'.$parts[1].'/'.$parts[0] : $date;
+    }
+
+    private function time(?string $time): string
+    {
+        if (! $time) {
+            return 'NO INDICADA';
+        }
+
+        [$hours, $minutes] = array_pad(explode(':', $time), 2, '00');
+        $hour = (int) $hours;
+
+        return ($hour % 12 ?: 12).':'.$minutes.' '.($hour < 12 ? 'a. m.' : 'p. m.');
     }
 
     private function text(string $value): string

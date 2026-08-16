@@ -87,7 +87,6 @@ class MedicalDocumentVerificationService
                 'result' => $log->result,
             ])->take(-10)->all();
         $history = collect([
-            ['event' => 'ISSUED', 'at' => $document->issued_at?->toIso8601String(), 'method' => null],
             $document->revoked_at ? ['event' => 'REVOKED', 'at' => $document->revoked_at->toIso8601String(), 'method' => null] : null,
             $document->status === MedicalDocumentStatus::REPLACED ? ['event' => 'REPLACED', 'at' => $document->updated_at?->toIso8601String(), 'method' => null] : null,
             ...$verificationHistory,
@@ -100,7 +99,6 @@ class MedicalDocumentVerificationService
             'code' => $document->public_code,
             'type' => $document->certificate_kind === 'INCAPACIDAD' ? 'Incapacidad Médica' : 'Constancia Médica',
             'status' => $document->status->value,
-            'issued_at' => $document->issued_at?->toIso8601String(),
             'consultation_date' => $document->consultation_date?->toDateString(),
             'consultation_time' => $document->consultation_time,
             'patient' => $patient ? [

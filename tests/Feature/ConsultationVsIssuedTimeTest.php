@@ -28,6 +28,7 @@ class ConsultationVsIssuedTimeTest extends TestCase
 
         $this->assertSame('2026-08-09', $result['document']['consultation_date']);
         $this->assertSame('14:00', substr((string) $result['document']['consultation_time'], 0, 5));
-        $this->assertSame($issuedAt->toIso8601String(), $result['document']['issued_at']);
+        $this->assertArrayNotHasKey('issued_at', $result['document']);
+        $this->assertSame($issuedAt, $document->fresh()->issued_at);
     }
 }

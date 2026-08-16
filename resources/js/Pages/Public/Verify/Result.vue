@@ -9,7 +9,6 @@ type PublicDoc = {
     code: string;
     type: string;
     status: string;
-    issued_at?: string;
     consultation_date?: string;
     consultation_time?: string;
     patient?: {
@@ -173,15 +172,12 @@ const money = (value: string, currency: string) =>
                             ><strong>{{ document.type }}</strong>
                         </div>
                         <div>
-                            <small>Fecha y hora de atención</small>
-                            <strong v-if="document.consultation_time">
-                                {{ date(document.consultation_date) }} a las
-                                {{ consultationTime(document.consultation_time) }}
-                            </strong>
-                            <strong v-else>
-                                {{ date(document.consultation_date) }}<br />
-                                Hora no especificada
-                            </strong>
+                            <small>Fecha de atención</small>
+                            <strong>{{ date(document.consultation_date) }}</strong>
+                        </div>
+                        <div>
+                            <small>Hora de atención</small>
+                            <strong>{{ consultationTime(document.consultation_time) }}</strong>
                         </div>
                         <div>
                             <small>Validación exacta</small
@@ -267,7 +263,7 @@ const money = (value: string, currency: string) =>
                                 <p class="kicker">Atención médica</p>
                                 <dl>
                                     <div>
-                                        <dt>Fecha de consulta</dt>
+                                        <dt>Fecha de atención</dt>
                                         <dd>
                                             {{
                                                 date(document.consultation_date)
@@ -275,7 +271,7 @@ const money = (value: string, currency: string) =>
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt>Hora de consulta</dt>
+                                        <dt>Hora de atención</dt>
                                         <dd>
                                             {{
                                                 consultationTime(document.consultation_time)
