@@ -54,6 +54,17 @@ class MedicalDocumentRevisionTest extends TestCase
         $service->create($source->fresh(), 'Second correction.', $user);
     }
 
+    public function test_editing_an_old_revision_redirects_to_the_current_revision(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::ADMINISTRATOR]);
+        $source = MedicalDocument::factory()->create(['status' => MedicalDocumentStatus::ISSUED, 'public_code' => 'CSA-CURRENT', 'revision_number' => 1]);
+        $current = MedicalDocument::factory()->create(['status' => MedicalDocumentStatus::ISSUED, 'public_code' => 'CSA-CURRENT', 'revision_number' => 2, 'is_current_revision' => true, 'reissue_of_id' => $source->id]);
+        $source->update(['is_current_revision' => false, 'status' => MedicalDocumentStatus::REPLACED, 'replaced_by_id' => $current->id]);
+
+        $this->actingAs($user)->get(route('admin.documents.edit', $source))
+            ->assertRedirect(route('admin.documents.edit', $current));
+    }
+
     public function test_review_payload_exposes_revision_traceability_and_changed_fields(): void
     {
         $user = User::factory()->create(['name' => 'Revision Administrator', 'role' => UserRole::SUPER_ADMIN]);

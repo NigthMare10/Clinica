@@ -65,7 +65,8 @@ const save = async () => {
     router.visit(data.redirect_url);
   } catch (error: any) {
     const status = error.response?.status;
-    saveError.value = status === 401 || status === 419 ? 'Tu sesión expiró. Vuelve a iniciar sesión.' : error.response?.data?.message || 'No fue posible regenerar el documento. La versión anterior continúa vigente.';
+    const details = error.response?.data;
+    saveError.value = status === 401 || status === 419 ? 'Tu sesión expiró. Vuelve a iniciar sesión.' : [details?.error_code, details?.message].filter(Boolean).join(': ') || 'No fue posible regenerar el documento. La versión anterior continúa vigente.';
   } finally { form.processing = false; }
 };
 const leave = () => { if (!dirty.value || window.confirm('Hay cambios sin guardar.')) window.location.assign(route('admin.documents.index')); };

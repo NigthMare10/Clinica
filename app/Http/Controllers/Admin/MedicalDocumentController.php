@@ -138,10 +138,15 @@ class MedicalDocumentController extends Controller
         ]);
     }
 
-    public function edit(Request $request, MedicalDocument $document, MedicalDocumentEditorTextService $editorText): Response
+    public function edit(Request $request, MedicalDocument $document, MedicalDocumentEditorTextService $editorText): Response|RedirectResponse
     {
         $this->authorize('correct', $document);
         abort_unless(in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true), 422);
+
+        $current = MedicalDocument::query()->where('public_code', $document->public_code)->where('is_current_revision', true)->first();
+        if ($current && $current->id !== $document->id) {
+            return redirect()->route('admin.documents.edit', $current);
+        }
 
         $document->load(['patient', 'clinic', 'revision']);
         $fields = $document->confirmed_fields ?? [];
@@ -209,14 +214,25 @@ class MedicalDocumentController extends Controller
             return $this->editFailure($request, 'Este documento fue actualizado en otra sesión. Recarga antes de guardar.', 409);
         }
         try {
-            $copy = $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
-            $fields = $data['fields'];
+            logger()->info('correction.start', ['document_id' => $document->id, 'public_code' => $document->public_code]);
+            $fields = array_filter($data['fields'], static fn ($value) => $value !== null && $value !== '');
+            $fields = array_replace($document->confirmed_fields ?? [], $fields);
+            $data['source_text'] = $editorText->clean($data['source_text']);
             $dates = ['consultation_date', 'leave_start_date', 'leave_end_date'];
             foreach ($dates as $field) {
                 if (! empty($fields[$field])) {
                     $fields[$field] = \Carbon\CarbonImmutable::createFromFormat('d/m/Y', $fields[$field])->toDateString();
                 }
             }
+            if (! empty($fields['leave_days']) && ! empty($fields['leave_start_date']) && ! empty($fields['leave_end_date'])) {
+                $days = \Carbon\CarbonImmutable::parse($fields['leave_start_date'])->diffInDays(\Carbon\CarbonImmutable::parse($fields['leave_end_date'])) + 1;
+                if ($days !== (int) $fields['leave_days']) {
+                    return $this->editFailure($request, 'Los días de incapacidad no coinciden con las fechas seleccionadas.', 422, 'INCAPACITY_RANGE_MISMATCH');
+                }
+            }
+            logger()->info('correction.validation.pass', ['document_id' => $document->id]);
+            $copy = $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
+            logger()->info('correction.revision.prepare', ['document_id' => $copy->id, 'revision' => $copy->revision_number]);
             [$firstName, $lastName] = $this->splitName($fields['patient_name']);
             $patient = $copy->patient;
             $patientData = ['first_name' => $firstName, 'last_name' => $lastName, 'age' => $fields['age_at_consultation'] ?? null];
@@ -232,14 +248,19 @@ class MedicalDocumentController extends Controller
                 'leave_end_date' => $fields['leave_end_date'] ?? null, 'recommendations' => $fields['recommendations'] ?? null,
                 'medical_reason' => $data['source_text'], 'confirmed_fields' => $confirmed,
             ])->save();
+            logger()->info('correction.pdf.start', ['document_id' => $copy->id]);
             $renderer->regenerate($copy);
+            logger()->info('correction.pdf.generated', ['document_id' => $copy->id]);
             $copy->forceFill(['inconsistencies' => [], 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'status' => MedicalDocumentStatus::READY])->save();
             $issued = $issuer->issue($copy, $request->user());
+            logger()->info('correction.revision.activated', ['document_id' => $issued->id, 'revision' => $issued->revision_number]);
             $invoices->synchronizeDrafts($issued, $request->user(), ['ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]);
+            logger()->info('correction.success', ['document_id' => $issued->id]);
         } catch (\Throwable $exception) {
             report($exception);
 
-            return $this->editFailure($request, 'No fue posible regenerar el documento. La versión anterior continúa vigente.', 422);
+            logger()->warning('correction.failed', ['document_id' => $document->id, 'error_code' => 'PDF_REGENERATION_FAILED', 'exception' => $exception::class]);
+            return $this->editFailure($request, 'No fue posible regenerar el documento. La versión anterior continúa vigente.', 422, 'PDF_REGENERATION_FAILED');
         }
 
         if ($request->expectsJson()) {
@@ -250,10 +271,10 @@ class MedicalDocumentController extends Controller
         return redirect()->route('admin.documents.edit', $issued)->with('status', 'DOCUMENTO ACTUALIZADO');
     }
 
-    private function editFailure(Request $request, string $message, int $status): RedirectResponse|JsonResponse
+    private function editFailure(Request $request, string $message, int $status, ?string $code = null): RedirectResponse|JsonResponse
     {
         if ($request->expectsJson()) {
-            return response()->json(['message' => $message], $status);
+            return response()->json(array_filter(['message' => $message, 'error_code' => $code]), $status);
         }
 
         return back()->withErrors(['source_text' => $message]);
