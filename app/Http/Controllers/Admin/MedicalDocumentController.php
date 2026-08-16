@@ -201,11 +201,13 @@ class MedicalDocumentController extends Controller
 
     public function updateIssued(UpdateIssuedMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentRevisionService $revisions,
         MedicalDocumentRevisionRenderService $renderer, MedicalDocumentIssueService $issuer, InvoiceMedicalDocumentSnapshotService $invoices,
-        MedicalDocumentEditorTextService $editorText): RedirectResponse
+        MedicalDocumentEditorTextService $editorText): RedirectResponse|JsonResponse
     {
         $data = $request->validated();
         $data['source_text'] = $editorText->clean($data['source_text']);
-        abort_unless($data['current_revision_id'] === $document->id, 409, 'Este documento fue actualizado en otra sesión. Recarga antes de guardar.');
+        if ($data['current_revision_id'] !== $document->id) {
+            return $this->editFailure($request, 'Este documento fue actualizado en otra sesión. Recarga antes de guardar.', 409);
+        }
         try {
             $copy = $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
             $fields = $data['fields'];
@@ -237,10 +239,24 @@ class MedicalDocumentController extends Controller
         } catch (\Throwable $exception) {
             report($exception);
 
-            return back()->withErrors(['source_text' => 'No fue posible regenerar el documento. La versión anterior continúa vigente.']);
+            return $this->editFailure($request, 'No fue posible regenerar el documento. La versión anterior continúa vigente.', 422);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'document_id' => $issued->id, 'public_code' => $issued->public_code,
+                'redirect_url' => route('admin.documents.edit', $issued)]);
         }
 
         return redirect()->route('admin.documents.edit', $issued)->with('status', 'DOCUMENTO ACTUALIZADO');
+    }
+
+    private function editFailure(Request $request, string $message, int $status): RedirectResponse|JsonResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message], $status);
+        }
+
+        return back()->withErrors(['source_text' => $message]);
     }
 
     private function displayDate(?string $date): ?string

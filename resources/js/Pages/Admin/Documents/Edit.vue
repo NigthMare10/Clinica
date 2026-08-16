@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import PageMeta from '@/Components/PageMeta.vue';
@@ -56,7 +56,18 @@ const updatePreview = async () => {
     activeTab.value = 'preview';
   } finally { previewing.value = false; }
 };
-const save = () => { saveError.value = ''; form.patch(route('admin.documents.update', props.document.id), { onSuccess: () => { dirty.value = false; }, onError: () => { saveError.value = form.errors.source_text || 'No fue posible regenerar el documento. La versión anterior continúa vigente.'; } }); };
+const save = async () => {
+  saveError.value = '';
+  form.processing = true;
+  try {
+    const { data } = await axios.patch(route('admin.documents.update', props.document.id), form.data(), { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+    dirty.value = false;
+    router.visit(data.redirect_url);
+  } catch (error: any) {
+    const status = error.response?.status;
+    saveError.value = status === 401 || status === 419 ? 'Tu sesión expiró. Vuelve a iniciar sesión.' : error.response?.data?.message || 'No fue posible regenerar el documento. La versión anterior continúa vigente.';
+  } finally { form.processing = false; }
+};
 const leave = () => { if (!dirty.value || window.confirm('Hay cambios sin guardar.')) window.location.assign(route('admin.documents.index')); };
 const openPreview = () => window.open(previewMode.value === 'current' ? props.previewUrl : previewUrl.value, '_blank');
 const showCurrentPreview = () => { previewMode.value = 'current'; previewFailed.value = false; };
