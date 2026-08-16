@@ -59,7 +59,7 @@ class MedicalDocumentRevisionTest extends TestCase
         $user = User::factory()->create(['role' => UserRole::ADMINISTRATOR]);
         $source = MedicalDocument::factory()->create(['status' => MedicalDocumentStatus::ISSUED, 'public_code' => 'CSA-CURRENT', 'revision_number' => 1]);
         $current = MedicalDocument::factory()->create(['status' => MedicalDocumentStatus::ISSUED, 'public_code' => 'CSA-CURRENT', 'revision_number' => 2, 'is_current_revision' => true, 'reissue_of_id' => $source->id]);
-        $source->update(['is_current_revision' => false, 'status' => MedicalDocumentStatus::REPLACED, 'replaced_by_id' => $current->id]);
+        $source->update(['replaced_by_id' => $current->id]);
 
         $this->actingAs($user)->get(route('admin.documents.edit', $source))
             ->assertRedirect(route('admin.documents.edit', $current));

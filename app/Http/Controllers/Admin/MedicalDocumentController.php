@@ -143,7 +143,10 @@ class MedicalDocumentController extends Controller
         $this->authorize('correct', $document);
         abort_unless(in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true), 422);
 
-        $current = MedicalDocument::query()->where('public_code', $document->public_code)->where('is_current_revision', true)->first();
+        // Legacy revisions may have a stale current flag; the highest issued revision is authoritative.
+        $current = MedicalDocument::query()->where('public_code', $document->public_code)
+            ->whereIn('status', [MedicalDocumentStatus::ISSUED->value, MedicalDocumentStatus::REVOKED->value])
+            ->orderByDesc('revision_number')->first();
         if ($current && $current->id !== $document->id) {
             return redirect()->route('admin.documents.edit', $current);
         }
