@@ -24,6 +24,7 @@ use App\Services\MedicalDocuments\MedicalDocumentConsistencyService;
 use App\Services\MedicalDocuments\MedicalDocumentIssueService;
 use App\Services\MedicalDocuments\MedicalDocumentRevisionRenderService;
 use App\Services\MedicalDocuments\MedicalDocumentRevisionService;
+use App\Services\MedicalDocuments\MedicalDocumentEditorTextService;
 use App\Services\MedicalDocuments\MedicalTextExtractionService;
 use App\Support\InstitutionalMedicalProvider;
 use Illuminate\Http\RedirectResponse;
@@ -137,7 +138,7 @@ class MedicalDocumentController extends Controller
         ]);
     }
 
-    public function edit(Request $request, MedicalDocument $document): Response
+    public function edit(Request $request, MedicalDocument $document, MedicalDocumentEditorTextService $editorText): Response
     {
         $this->authorize('correct', $document);
         abort_unless(in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true), 422);
@@ -145,7 +146,7 @@ class MedicalDocumentController extends Controller
         $document->load(['patient', 'clinic', 'revision']);
         $fields = $document->confirmed_fields ?? [];
         $revisionFields = $document->revision?->current_snapshot['confirmed_fields'] ?? [];
-        $sourceText = $revisionFields['free_text'] ?? $fields['source_text'] ?? $fields['free_text'] ?? $document->medical_reason ?? '';
+        $sourceText = $editorText->clean((string) ($revisionFields['free_text'] ?? $fields['source_text'] ?? $fields['free_text'] ?? $document->medical_reason ?? ''));
         $invoices = $request->user()->can('viewAny', Invoice::class) ? $document->invoices()->latest()->get(['id', 'status', 'ncf']) : collect();
 
         return Inertia::render('Admin/Documents/Edit', [
@@ -169,10 +170,11 @@ class MedicalDocumentController extends Controller
         ]);
     }
 
-    public function analyzeEdit(Request $request, MedicalDocument $document, MedicalTextExtractionService $extractor): JsonResponse
+    public function analyzeEdit(Request $request, MedicalDocument $document, MedicalTextExtractionService $extractor, MedicalDocumentEditorTextService $editorText): JsonResponse
     {
         $this->authorize('correct', $document);
         $data = $request->validate(['source_text' => ['required', 'string', 'max:12000'], 'fields' => ['required', 'array']]);
+        $data['source_text'] = $editorText->clean($data['source_text']);
         $analysis = $extractor->extract($data['source_text'], strtolower((string) ($document->certificate_kind ?: 'constancia')));
         $mapped = [
             'patient_name' => $analysis['fields']['patient_name'], 'identity' => $analysis['fields']['identity'],
@@ -187,20 +189,22 @@ class MedicalDocumentController extends Controller
         return response()->json(['fields' => $mapped, 'changes' => $changes]);
     }
 
-    public function previewEdit(Request $request, MedicalDocument $document, MedicalDocumentRevisionRenderService $renderer)
+    public function previewEdit(Request $request, MedicalDocument $document, MedicalDocumentRevisionRenderService $renderer, MedicalDocumentEditorTextService $editorText)
     {
         $this->authorize('correct', $document);
         $data = $request->validate(['source_text' => ['required', 'string', 'max:12000'], 'fields' => ['required', 'array']]);
 
-        return response($renderer->preview($document, [...$data['fields'], 'source_text' => $data['source_text']]), 200, [
+        return response($renderer->preview($document, [...$data['fields'], 'source_text' => $editorText->clean($data['source_text'])]), 200, [
             'Content-Type' => 'application/pdf', 'Cache-Control' => 'no-store, private, max-age=0', 'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
     public function updateIssued(UpdateIssuedMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentRevisionService $revisions,
-        MedicalDocumentRevisionRenderService $renderer, MedicalDocumentIssueService $issuer, InvoiceMedicalDocumentSnapshotService $invoices): RedirectResponse
+        MedicalDocumentRevisionRenderService $renderer, MedicalDocumentIssueService $issuer, InvoiceMedicalDocumentSnapshotService $invoices,
+        MedicalDocumentEditorTextService $editorText): RedirectResponse
     {
         $data = $request->validated();
+        $data['source_text'] = $editorText->clean($data['source_text']);
         abort_unless($data['current_revision_id'] === $document->id, 409, 'Este documento fue actualizado en otra sesión. Recarga antes de guardar.');
         try {
             $copy = $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
