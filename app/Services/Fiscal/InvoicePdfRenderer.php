@@ -6,7 +6,7 @@ use App\Models\Invoice;
 
 class InvoicePdfRenderer
 {
-    /** @param array{items: array<int, array{lines: array<int, string>, line_count: int}>, total_lines: int} $layout */
+    /** @param array{mode: 'NORMAL'|'COMPACT', items: array<int, array{lines: array<int, string>, line_count: int, visual_row_height: float}>, total_lines: int, zones: array<string, array{y: float, height?: float}>} $layout */
     public function render(Invoice $invoice, array $layout, string $qrPath, string $output): array
     {
         $pdf = new \FPDF('P', 'mm', 'A4');
@@ -42,9 +42,9 @@ class InvoicePdfRenderer
         $pdf->SetY(43);
         $this->controlRow($pdf, $invoice);
         $this->customerBlock($pdf, $invoice, $patient, $document);
-        $tableEnd = $this->itemsTable($pdf, $invoice, $layout);
-        $this->financialBlocks($pdf, $invoice, $qrPath, $tableEnd);
-        $this->footerBlocks($pdf, $invoice, $document);
+        $this->itemsTable($pdf, $invoice, $layout);
+        $this->financialBlocks($pdf, $invoice, $qrPath, $layout['zones']['totals']['y']);
+        $this->footerBlocks($pdf, $invoice, $document, $layout['zones']['authorizations']['y']);
         $pdf->Output('F', $output);
 
         return [];
@@ -90,14 +90,15 @@ class InvoicePdfRenderer
         $pdf->Ln();
         $pdf->SetFont('Helvetica', '', 7.5);
         foreach ($invoice->items as $index => $item) {
-            $height = max(4.3, $layout['items'][$index]['line_count'] * 4.3);
+            $height = $layout['items'][$index]['visual_row_height'];
+            $lineHeight = $height / $layout['items'][$index]['line_count'];
             $y = $pdf->GetY();
             $pdf->Cell($widths[0], $height, $item->service_code ?: '', 0, 0, 'C');
             $pdf->Cell($widths[1], $height, number_format((float) $item->quantity, 0), 0, 0, 'C');
             $x = $pdf->GetX();
             foreach ($layout['items'][$index]['lines'] as $lineIndex => $line) {
-                $pdf->SetXY($x, $y + ($lineIndex * 4.3));
-                $pdf->Cell($widths[2], 4.3, $this->text($line));
+                $pdf->SetXY($x, $y + ($lineIndex * $lineHeight));
+                $pdf->Cell($widths[2], $lineHeight, $this->text($line));
             }
             $pdf->SetXY($x + $widths[2], $y);
             $pdf->Cell($widths[3], $height, number_format((float) $item->unit_price, 2), 0, 0, 'R');
@@ -172,9 +173,8 @@ class InvoicePdfRenderer
         $pdf->Image($qrPath, 86, $y + 51, 23, 23, 'PNG');
     }
 
-    private function footerBlocks(\FPDF $pdf, Invoice $invoice, mixed $document): void
+    private function footerBlocks(\FPDF $pdf, Invoice $invoice, mixed $document, float $y): void
     {
-        $y = 181;
         $pdf->Rect(10, $y, 95, 45);
         $pdf->Rect(105, $y, 95, 45);
         $pdf->SetFont('Helvetica', 'B', 7.2);
@@ -193,14 +193,14 @@ class InvoicePdfRenderer
             $pdf->SetXY(108, $y + 11 + ($offset * 7));
             $pdf->Cell(85, 4, $this->text($label.' ____________________'));
         }
-        $pdf->SetXY(10, 221);
+        $pdf->SetXY(10, $y + 36);
         $pdf->SetFont('Helvetica', 'B', 7.5);
         $pdf->Cell(95, 4, 'ORIGINAL - CLIENTE');
         $pdf->Cell(95, 4, 'COPIA - OBLIGADO TRIBUTARIO EMISOR', 0, 1, 'R');
         $pdf->SetFont('Helvetica', '', 7.2);
         $pdf->Cell(95, 4, $this->text('Vigencia de muestras pendientes - 30 días.'));
         $pdf->Cell(95, 4, $this->text('La factura es beneficio de todos. Exígela.'), 0, 1, 'R');
-        $pdf->SetXY(116, 167);
+        $pdf->SetXY(116, $y - 5);
         $pdf->SetFont('Helvetica', '', 7);
         $pdf->Cell(78, 4, $this->text('Original: Cliente   Copia: Emisor   Atendido por: '.($invoice->createdBy?->name ?? '')), 0, 0, 'R');
     }

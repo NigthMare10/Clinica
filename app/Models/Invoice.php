@@ -59,6 +59,12 @@ class Invoice extends Model
         return $user->hasAnyRole(UserRole::SUPER_ADMIN) ? $query : $query->whereIn('clinic_id', $user->accessibleClinicIds());
     }
 
+    public function scopeCurrentIssued(Builder $query): Builder
+    {
+        return $query->where('status', InvoiceStatus::ISSUED)
+            ->whereDoesntHave('replacements', fn (Builder $replacements) => $replacements->where('status', InvoiceStatus::ISSUED));
+    }
+
     public function clinic()
     {
         return $this->belongsTo(Clinic::class);

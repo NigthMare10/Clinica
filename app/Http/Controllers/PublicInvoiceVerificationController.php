@@ -14,6 +14,19 @@ class PublicInvoiceVerificationController extends Controller
     {
         abort_unless((bool) preg_match('/^[A-Za-z0-9]{64}$/', $token), 404);
         $invoice = Invoice::query()->where('qr_token_hash', hash('sha256', $token))->firstOrFail();
+
+        return $this->result($request, $invoice);
+    }
+
+    public function linked(Request $request, Invoice $invoice): Response
+    {
+        abort_unless($request->session()->get('public_pdf_preview.invoice_id') === $invoice->id, 403);
+
+        return $this->result($request, $invoice);
+    }
+
+    private function result(Request $request, Invoice $invoice): Response
+    {
         $invoice->loadMissing('authorization');
         $verifiedAt = now(config('institution.timezone'));
 

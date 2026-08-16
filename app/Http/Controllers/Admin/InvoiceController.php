@@ -20,6 +20,7 @@ use App\Services\Fiscal\InvoiceDraftService;
 use App\Services\Fiscal\InvoiceIssueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -117,7 +118,11 @@ class InvoiceController extends Controller
     public function issue(IssueInvoiceRequest $request, Invoice $invoice, InvoiceIssueService $service): JsonResponse
     {
         $this->authorize('issue', $invoice);
-        $result = $service->issue($invoice, $request->user(), $request->validated('fiscal_authorization_id'));
+        try {
+            $result = $service->issue($invoice, $request->user(), $request->validated('fiscal_authorization_id'));
+        } catch (\DomainException $exception) {
+            throw ValidationException::withMessages(['items' => $exception->getMessage()]);
+        }
 
         return response()->json(['invoice' => $result['invoice']->load('items'), 'qr_token' => $result['qr_token'], 'verification_url' => route('public.invoice.verify', $result['qr_token']), 'download_url' => route('admin.invoices.download', $invoice)]);
     }

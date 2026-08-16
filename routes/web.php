@@ -21,6 +21,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicInvoiceVerificationController;
 use App\Http\Controllers\PublicSiteController;
 use App\Http\Controllers\PublicVerificationController;
+use App\Http\Controllers\PublicVerifiedPdfController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [PublicSiteController::class, 'home'])->name('public.home');
@@ -35,8 +36,14 @@ Route::middleware('noindex')->prefix('verificar')->name('public.verify.')->group
     Route::get('/{token}', [PublicVerificationController::class, 'token'])->middleware('throttle:60,1')->name('token');
     Route::post('/codigo', [PublicVerificationController::class, 'code'])->middleware('throttle:30,1')->name('code');
     Route::post('/archivo', [PublicVerificationController::class, 'file'])->middleware('throttle:10,1')->name('file');
+    Route::get('/documentos/{document}/preview', [PublicVerifiedPdfController::class, 'document'])->middleware('throttle:30,1')->name('document.preview');
+    Route::get('/documentos/{document}/download', fn (\Illuminate\Http\Request $request, \App\Models\MedicalDocument $document, PublicVerifiedPdfController $controller) => $controller->document($request, $document, 'attachment'))->middleware('throttle:30,1')->name('document.download');
+    Route::get('/facturas/{invoice}/preview', [PublicVerifiedPdfController::class, 'invoice'])->middleware('throttle:30,1')->name('invoice.preview');
+    Route::get('/facturas/{invoice}/download', fn (\Illuminate\Http\Request $request, \App\Models\Invoice $invoice, PublicVerifiedPdfController $controller) => $controller->invoice($request, $invoice, 'attachment'))->middleware('throttle:30,1')->name('invoice.download');
 });
 
+Route::get('/verificar/factura/documento/{invoice}', [PublicInvoiceVerificationController::class, 'linked'])
+    ->middleware(['noindex', 'throttle:30,1'])->name('public.invoice.linked');
 Route::get('/verificar/factura/{token}', PublicInvoiceVerificationController::class)
     ->middleware(['noindex', 'throttle:60,1'])->name('public.invoice.verify');
 

@@ -4,6 +4,7 @@ namespace App\Services\MedicalDocuments;
 
 use App\Enums\MedicalDocumentStatus;
 use App\Models\DocumentVerificationLog;
+use App\Models\Invoice;
 use App\Models\MedicalDocument;
 use Throwable;
 
@@ -63,15 +64,17 @@ class MedicalDocumentVerificationService
             // Public verification remains available if best-effort logging fails.
         }
 
-        return [
+        $data = [
             'status' => $status,
             'document' => $document && $status !== 'NOT_ISSUED' ? $this->publicData($document, $identityVerified, $verifiedAt, $method) : null,
         ];
+
+        return $data;
     }
 
     private function publicData(MedicalDocument $document, bool $identityVerified, mixed $verifiedAt, string $method): array
     {
-        $document->loadMissing(['patient', 'doctor', 'clinic', 'verificationLogs', 'replacedBy']);
+        $document->loadMissing(['patient', 'doctor', 'clinic', 'verificationLogs', 'replacedBy', 'reissueOf']);
         $patient = $document->patient;
         $patientName = (string) ($document->confirmed_fields['patient_name'] ?? trim((string) $patient?->first_name.' '.(string) $patient?->last_name));
         $patientDocument = (string) ($document->confirmed_fields['patient_document'] ?? $patient?->document_number);
@@ -93,7 +96,7 @@ class MedicalDocumentVerificationService
         $provider = $institution['provider'] ?? config('institution.provider');
         $security = $document->template_snapshot['security'] ?? [];
 
-        return [
+        $data = [
             'code' => $document->public_code,
             'type' => $document->certificate_kind === 'INCAPACIDAD' ? 'Incapacidad Médica' : 'Constancia Médica',
             'status' => $document->status->value,
@@ -136,6 +139,37 @@ class MedicalDocumentVerificationService
             'history' => $history,
             'replacement_code' => $document->replacedBy?->public_code,
         ];
+        $invoice = $this->currentInvoice($document);
+        if ($invoice) {
+            $data['invoice'] = [
+                'ncf' => $invoice->ncf,
+                'service_date' => $invoice->service_date?->toDateString(),
+                'total' => number_format((float) $invoice->total, 2, '.', ''),
+                'currency' => $invoice->currency,
+                'status' => $invoice->status->value,
+                'verification_code' => $invoice->medical_document_code ?: $document->public_code,
+                'preview_url' => $identityVerified ? route('public.verify.invoice.preview', $invoice) : null,
+                'download_url' => $identityVerified ? route('public.verify.invoice.download', $invoice) : null,
+                'validation_url' => $identityVerified ? route('public.invoice.linked', $invoice) : null,
+            ];
+            $data['access_invoice_id'] = $invoice->id;
+        }
+        if ($identityVerified) {
+            $data['preview_url'] = route('public.verify.document.preview', $document);
+            $data['download_url'] = route('public.verify.document.download', $document);
+        }
+        $data['access_document_id'] = $document->id;
+
+        return $data;
+    }
+
+    private function currentInvoice(MedicalDocument $document): ?Invoice
+    {
+        $sourceId = $document->reissueOf?->id;
+
+        return Invoice::query()->currentIssued()
+            ->whereIn('medical_document_id', array_filter([$document->id, $sourceId]))
+            ->latest('issued_at')->first();
     }
 
     private function identityMatches(?MedicalDocument $document, ?string $last4): bool

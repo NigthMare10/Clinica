@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { Link, useForm } from "@inertiajs/vue3";
 import PublicLayout from "@/Layouts/PublicLayout.vue";
 import PageMeta from "@/Components/PageMeta.vue";
@@ -46,6 +46,19 @@ type PublicDoc = {
     };
     history: History[];
     replacement_code?: string | null;
+    preview_url?: string;
+    download_url?: string;
+    invoice?: {
+        ncf: string | null;
+        service_date?: string | null;
+        total: string;
+        currency: string;
+        status: string;
+        verification_code: string;
+        preview_url?: string | null;
+        download_url?: string | null;
+        validation_url?: string | null;
+    };
 };
 
 const props = defineProps<{
@@ -65,6 +78,7 @@ const unlock = useForm({
     source: props.challenge?.source || "MANUAL_CODE",
 });
 const valid = computed(() => props.status === "VALID");
+const activeLinkedDocument = ref<"document" | "invoice">("document");
 const title = computed(
     () =>
         ({
@@ -123,6 +137,8 @@ const verifyDetails = () => {
         unlock.get(window.location.pathname, { preserveScroll: true });
     else unlock.post(route("public.verify.code"), { preserveScroll: true });
 };
+const money = (value: string, currency: string) =>
+    new Intl.NumberFormat("es-HN", { style: "currency", currency: currency || "HNL" }).format(Number(value));
 </script>
 
 <template>
@@ -357,6 +373,38 @@ const verifyDetails = () => {
                                         </dd>
                                     </div>
                                 </dl>
+                            </section>
+
+                            <section v-if="document.invoice" class="verification-section linked-documents">
+                                <p class="kicker">Documentos vinculados</p>
+                                <div class="linked-documents__tabs" role="tablist" aria-label="Documentos vinculados">
+                                    <button :class="{ active: activeLinkedDocument === 'document' }" role="tab" :aria-selected="activeLinkedDocument === 'document'" @click="activeLinkedDocument = 'document'">Documento médico</button>
+                                    <button :class="{ active: activeLinkedDocument === 'invoice' }" role="tab" :aria-selected="activeLinkedDocument === 'invoice'" @click="activeLinkedDocument = 'invoice'">Factura</button>
+                                </div>
+                                <div v-if="activeLinkedDocument === 'document'" class="linked-documents__preview">
+                                    <iframe v-if="document.preview_url" :src="document.preview_url" title="Vista previa del documento médico" loading="lazy" />
+                                    <p v-else class="protected-copy">Autorice los detalles del paciente para abrir o descargar el documento médico.</p>
+                                    <div v-if="document.preview_url" class="linked-documents__actions">
+                                        <a class="button button--outline" :href="document.preview_url" target="_blank" rel="noopener">Ver documento</a>
+                                        <a class="button button--outline" :href="document.download_url">Descargar documento</a>
+                                    </div>
+                                </div>
+                                <div v-else class="linked-documents__preview">
+                                    <dl class="linked-documents__summary">
+                                        <div><dt>NCF</dt><dd>{{ document.invoice.ncf }}</dd></div>
+                                        <div><dt>Fecha de servicio</dt><dd>{{ date(document.invoice.service_date) }}</dd></div>
+                                        <div><dt>Total</dt><dd>{{ money(document.invoice.total, document.invoice.currency) }}</dd></div>
+                                        <div><dt>Estado</dt><dd>{{ document.invoice.status }}</dd></div>
+                                        <div><dt>Código de verificación</dt><dd>{{ document.invoice.verification_code }}</dd></div>
+                                    </dl>
+                                    <iframe v-if="document.invoice.preview_url" :src="document.invoice.preview_url" title="Vista previa de factura" loading="lazy" />
+                                    <p v-else class="protected-copy">Autorice los detalles del paciente para abrir o descargar la factura vinculada.</p>
+                                    <div v-if="document.invoice.preview_url" class="linked-documents__actions">
+                                        <a class="button button--outline" :href="document.invoice.preview_url || undefined" target="_blank" rel="noopener">Ver factura</a>
+                                        <a class="button button--outline" :href="document.invoice.download_url || undefined">Descargar factura</a>
+                                        <a class="button button--outline" :href="document.invoice.validation_url || undefined">Validar factura</a>
+                                    </div>
+                                </div>
                             </section>
 
                             <section class="verification-section">

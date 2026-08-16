@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Services\Fiscal\InvoiceIssueService;
 use App\Services\Fiscal\InvoicePdfInfoService;
+use App\Services\Fiscal\InvoicePdfLayoutCalculator;
 use App\Services\Fiscal\InvoicePdfService;
 use App\Services\Fiscal\InvoiceQrCodeService;
 use App\Services\MedicalDocuments\PdfEncryptionService;
@@ -18,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Mockery\MockInterface;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class InvoicePdfSinglePageTest extends TestCase
@@ -118,6 +120,66 @@ class InvoicePdfSinglePageTest extends TestCase
         } finally {
             @unlink($path);
         }
+    }
+
+    public function test_five_item_fiscal_fixture_is_one_page_and_can_be_rendered_for_visual_qa(): void
+    {
+        [$user, $clinic] = $this->userAndClinic();
+        $authorization = FiscalAuthorization::create($this->authorizationData($clinic));
+        $invoice = $this->invoice($user, $clinic, 5);
+        foreach ($invoice->items as $index => $item) {
+            $item->update([
+                'description' => ['Consulta médica', 'Medicamentos', 'Guantes', 'Jeringas', 'Exámenes'][$index],
+                'unit_price' => [350, 450, 50, 50, 700][$index],
+                'tax_category' => TaxCategory::EXENTO,
+            ]);
+        }
+
+        $issued = app(InvoiceIssueService::class)->issue($invoice->fresh('items'), $user, $authorization->id)['invoice']->fresh();
+        $decrypted = tempnam(sys_get_temp_dir(), 'invoice-five-items-');
+        try {
+            app(PdfEncryptionService::class)->decrypt(Storage::disk('local')->path($issued->getRawOriginal('issued_path')), $decrypted);
+            app(InvoicePdfInfoService::class)->assertOnePage($decrypted);
+            if (env('QA_RENDER_ARTIFACTS')) {
+                $directory = base_path('artifacts/invoice-layout-qa');
+                if (! is_dir($directory)) {
+                    mkdir($directory, 0700, true);
+                }
+                $pdf = $directory.'/five-items.pdf';
+                copy($decrypted, $pdf);
+                $render = new Process(['pdftoppm', '-png', '-singlefile', '-r', '144', $pdf, $directory.'/five-items']);
+                $render->mustRun();
+                $this->assertFileExists($directory.'/five-items.png');
+            }
+        } finally {
+            @unlink($decrypted);
+        }
+    }
+
+    public function test_eight_compact_items_remain_on_one_page(): void
+    {
+        [$user, $clinic] = $this->userAndClinic();
+        $authorization = FiscalAuthorization::create($this->authorizationData($clinic));
+        $issued = app(InvoiceIssueService::class)->issue($this->invoice($user, $clinic, 8), $user, $authorization->id)['invoice']->fresh();
+        $decrypted = tempnam(sys_get_temp_dir(), 'invoice-eight-items-');
+        try {
+            app(PdfEncryptionService::class)->decrypt(Storage::disk('local')->path($issued->getRawOriginal('issued_path')), $decrypted);
+            app(InvoicePdfInfoService::class)->assertOnePage($decrypted);
+        } finally {
+            @unlink($decrypted);
+        }
+    }
+
+    public function test_long_description_uses_a_measured_visual_row_before_issue(): void
+    {
+        [$user, $clinic] = $this->userAndClinic();
+        $invoice = $this->invoice($user, $clinic, 5);
+        $invoice->items()->first()->update(['description' => 'Servicio de laboratorio con preparación, toma de muestra, procesamiento y entrega de resultados verificables en línea']);
+
+        $layout = app(InvoicePdfLayoutCalculator::class)->calculate($invoice->fresh('items'));
+
+        $this->assertGreaterThan(1, $layout['items'][0]['line_count']);
+        $this->assertGreaterThan(4.3, $layout['items'][0]['visual_row_height']);
     }
 
     private function userAndClinic(): array

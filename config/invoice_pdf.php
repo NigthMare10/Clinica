@@ -3,9 +3,9 @@
 return [
     'disk' => env('INVOICE_PDF_DISK', env('MEDICAL_DOCUMENT_DISK', 'local')),
     'encryption_enabled' => filter_var(env('INVOICE_PDF_ENCRYPTION', true), FILTER_VALIDATE_BOOL),
-    'max_items' => (int) env('INVOICE_PDF_MAX_ITEMS', 12),
-    'max_item_lines' => (int) env('INVOICE_PDF_MAX_ITEM_LINES', 13),
-    'description_characters_per_line' => (int) env('INVOICE_PDF_DESCRIPTION_CHARACTERS_PER_LINE', 52),
+    // The fixed fiscal zones reserve the bottom of the page for QR, authorizations and marks.
+    'max_items' => (int) env('INVOICE_PDF_MAX_ITEMS', 8),
+    'footer_y' => (float) env('INVOICE_PDF_FOOTER_Y', 220),
     'institutional_marks' => [
         'signature' => ['x' => 28, 'y' => 231, 'width' => 39],
         'stamp' => ['x' => 78, 'y' => 227, 'width' => 34],
