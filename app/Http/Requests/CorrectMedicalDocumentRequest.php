@@ -13,6 +13,9 @@ class CorrectMedicalDocumentRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['reason' => ['required', 'string', 'min:3', 'max:2000']];
+        return [
+            'reason' => ['required', 'string', 'min:3', 'max:2000'],
+            'expected_revision' => ['nullable', 'integer', 'min:1'],
+        ];
     }
 }

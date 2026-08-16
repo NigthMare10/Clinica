@@ -16,6 +16,8 @@ class MedicalDocumentVerificationService
     {
         $document = MedicalDocument::query()->where('token_hash', hash('sha256', $token))->first();
 
+        $document = $this->currentRevision($document);
+
         return $this->result($document, in_array($method, ['QR_LINK', 'QR_CAMERA'], true) ? $method : 'QR_LINK', $identityLast4);
     }
 
@@ -30,6 +32,8 @@ class MedicalDocumentVerificationService
     {
         $hash = $this->hashes->file($path);
         $document = MedicalDocument::query()->where('issued_sha256', $hash)->first();
+
+        $document = $this->currentRevision($document);
 
         return $this->result($document, 'PDF_HASH', $identityLast4, $hash);
     }
@@ -168,6 +172,15 @@ class MedicalDocumentVerificationService
         return Invoice::query()->currentIssued()
             ->whereIn('medical_document_id', array_filter([$document->id, $sourceId]))
             ->latest('issued_at')->first();
+    }
+
+    private function currentRevision(?MedicalDocument $document): ?MedicalDocument
+    {
+        if (! $document?->public_code) {
+            return $document;
+        }
+
+        return MedicalDocument::query()->where('public_code', $document->public_code)->where('is_current_revision', true)->first() ?? $document;
     }
 
     private function identityMatches(?MedicalDocument $document, ?string $last4): bool

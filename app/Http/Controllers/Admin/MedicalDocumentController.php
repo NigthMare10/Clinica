@@ -45,6 +45,11 @@ class MedicalDocumentController extends Controller
                 ->orWhereHas('patient', fn ($patient) => $patient->where('first_name', 'like', "%$search%")->orWhere('last_name', 'like', "%$search%"))))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->latest()->paginate(25, ['id', 'patient_id', 'doctor_id', 'type', 'certificate_kind', 'source_kind', 'status', 'public_code', 'original_filename', 'created_at'])->withQueryString();
+        $documents->through(fn (MedicalDocument $document) => [
+            ...$document->toArray(),
+            'can_edit' => $request->user()->can('correct', $document)
+                && in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true),
+        ]);
 
         return Inertia::render('Admin/Documents/Index', ['documents' => $documents, 'filters' => $request->only('search', 'status')]);
     }
@@ -123,6 +128,7 @@ class MedicalDocumentController extends Controller
                 && in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true)
                 && ! $document->reissues()->whereIn('status', [MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY, MedicalDocumentStatus::ISSUED])->exists(),
             'canCreateInvoice' => $document->status === MedicalDocumentStatus::ISSUED && $request->user()->can('create', Invoice::class),
+            'canViewInternalHistory' => $request->user()->hasAnyRole(UserRole::SUPER_ADMIN, UserRole::ADMINISTRATOR),
             'doctors' => [app(InstitutionalMedicalProvider::class)->doctor()],
             'patients' => Patient::orderBy('last_name')->get(),
         ]);
@@ -190,7 +196,7 @@ class MedicalDocumentController extends Controller
 
     public function correct(CorrectMedicalDocumentRequest $request, MedicalDocument $document, MedicalDocumentRevisionService $service): RedirectResponse
     {
-        $copy = $service->create($document, $request->validated('reason'), $request->user());
+        $copy = $service->create($document, $request->validated('reason'), $request->user(), $request->integer('expected_revision') ?: null);
 
         return redirect()->route('admin.documents.review', $copy);
     }

@@ -14,15 +14,18 @@ class MedicalDocumentRevisionService
 {
     public function __construct(private MedicalDocumentAuditService $audit) {}
 
-    public function create(MedicalDocument $document, string $reason, User $user): MedicalDocument
+    public function create(MedicalDocument $document, string $reason, User $user, ?int $expectedRevision = null): MedicalDocument
     {
-        return DB::transaction(function () use ($document, $reason, $user) {
+        return DB::transaction(function () use ($document, $reason, $user, $expectedRevision) {
             $source = MedicalDocument::query()->lockForUpdate()->findOrFail($document->id);
             if (! in_array($source->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true)) {
                 throw new RuntimeException('Only issued or revoked documents can be corrected.');
             }
             if (! $source->public_code) {
                 throw new RuntimeException('A correction requires a public document code.');
+            }
+            if ($expectedRevision !== null && $source->revision_number !== $expectedRevision) {
+                abort(409, 'Este documento cambió mientras lo editabas. Recarga antes de guardar.');
             }
             if ($source->reissues()->whereIn('status', [MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY, MedicalDocumentStatus::ISSUED])->exists()) {
                 throw new RuntimeException('The document already has a current correction.');
