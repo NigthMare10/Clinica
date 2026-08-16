@@ -16,6 +16,7 @@ const analyzing = ref(false);
 const previewing = ref(false);
 const changes = ref<{ field: string; before: unknown; after: unknown }[]>([]);
 const dirty = ref(false);
+const saveError = ref('');
 const fieldNames: Record<string, string> = { patient_name: 'Paciente', identity: 'Identidad', age_at_consultation: 'Edad', consultation_date: 'Fecha', consultation_time: 'Hora', diagnosis: 'Diagnóstico', leave_days: 'Días', leave_start_date: 'Inicio', leave_end_date: 'Final', recommendations: 'Recomendaciones' };
 const title = computed(() => props.document.certificate_kind === 'INCAPACIDAD' ? 'Editar incapacidad médica' : 'Editar constancia médica');
 const updated = computed(() => (usePage().props.flash as { status?: string } | undefined)?.status === 'DOCUMENTO ACTUALIZADO');
@@ -55,7 +56,7 @@ const updatePreview = async () => {
     activeTab.value = 'preview';
   } finally { previewing.value = false; }
 };
-const save = () => form.patch(route('admin.documents.update', props.document.id), { onSuccess: () => { dirty.value = false; } });
+const save = () => { saveError.value = ''; form.patch(route('admin.documents.update', props.document.id), { onSuccess: () => { dirty.value = false; }, onError: () => { saveError.value = form.errors.source_text || 'No fue posible regenerar el documento. La versión anterior continúa vigente.'; } }); };
 const leave = () => { if (!dirty.value || window.confirm('Hay cambios sin guardar.')) window.location.assign(route('admin.documents.index')); };
 const openPreview = () => window.open(previewMode.value === 'current' ? props.previewUrl : previewUrl.value, '_blank');
 const showCurrentPreview = () => { previewMode.value = 'current'; previewFailed.value = false; };
@@ -79,6 +80,7 @@ const showChangedPreview = () => { previewMode.value = 'changes'; previewFailed.
           <div v-if="changes.length" class="changes"><b>Cambios detectados</b><p v-for="change in changes" :key="change.field"><strong>{{ fieldNames[change.field] || change.field }}:</strong> {{ change.before || 'No indicado' }} → {{ change.after }}</p></div>
           <label class="reason">Motivo interno<select v-model="form.reason"><option>Error de redacción</option><option>Error de datos</option><option>Solicitud del paciente</option><option>Otro</option></select></label>
           <p v-if="form.errors.source_text || form.errors.current_revision_id" class="form-error">{{ form.errors.source_text || form.errors.current_revision_id }}</p>
+          <p v-if="saveError" class="form-error">{{ saveError }}</p>
         </section>
       </div>
       <footer class="sticky-actions"><span v-if="dirty" class="unsaved">Cambios sin guardar</span><button class="button button--outline-small" type="button" @click="leave">Cancelar</button><button class="button button--outline-small" :disabled="previewing" type="button" @click="updatePreview">{{ previewing ? 'Actualizando...' : 'Actualizar vista previa' }}</button><button class="button button--admin" :disabled="form.processing" type="button" @click="save">{{ form.processing ? 'Regenerando documento...' : 'Guardar cambios y regenerar' }}</button></footer>
