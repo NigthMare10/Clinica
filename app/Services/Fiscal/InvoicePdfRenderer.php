@@ -54,7 +54,7 @@ class InvoicePdfRenderer
     {
         $pdf->SetFont('Helvetica', 'B', 8.5);
         $pdf->Cell(44, 8, 'Orden: '.$invoice->order_number, 1, 0);
-        $pdf->Cell(44, 8, $this->text('Fecha: '.$invoice->issued_at->format('d/m/Y')), 1, 0, 'C');
+        $pdf->Cell(44, 8, $this->text('Fecha: '.$this->serviceDate($invoice)), 1, 0, 'C');
         $pdf->Cell(38, 8, $this->text('Hora: '.$invoice->issued_at->format('h:i A')), 1, 0, 'C');
         $pdf->Cell(64, 8, 'Factura: '.$invoice->invoice_control_number, 1, 1);
     }
