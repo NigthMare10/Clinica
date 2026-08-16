@@ -117,15 +117,16 @@ class PdfTemplateRenderService
         $body = trim((string) preg_replace("/\r\n?/", "\n", (string) $body));
         $paragraphs = preg_split('/\n\s*\n/u', $body) ?: [];
 
+        $compact = mb_strlen($body) > 1100;
         $pdf->SetTextColor(28, 45, 57);
-        $pdf->SetFont('Helvetica', '', 10.2);
+        $pdf->SetFont('Helvetica', '', $compact ? 8.8 : 10.2);
         foreach ($paragraphs as $paragraph) {
             $paragraph = trim((string) preg_replace('/[ \t]*\n[ \t]*/u', ' ', $paragraph));
             if ($paragraph === '') {
                 continue;
             }
-            $pdf->MultiCell(0, 5.2, $this->text($paragraph), 0, 'J');
-            $pdf->Ln(2.2);
+            $pdf->MultiCell(0, $compact ? 4.35 : 5.2, $this->text($paragraph), 0, 'J');
+            $pdf->Ln($compact ? 1.2 : 2.2);
         }
         if ($pdf->GetY() > 190) {
             throw new RuntimeException('Contenido demasiado extenso para formato de una página.');
