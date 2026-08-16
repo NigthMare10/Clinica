@@ -141,11 +141,11 @@ class MedicalDocumentController extends Controller
     public function edit(Request $request, MedicalDocument $document, MedicalDocumentEditorTextService $editorText): Response|RedirectResponse
     {
         $this->authorize('correct', $document);
-        abort_unless(in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED], true), 422);
+        abort_unless(in_array($document->status, [MedicalDocumentStatus::ISSUED, MedicalDocumentStatus::REVOKED, MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY], true), 422);
 
         // Legacy revisions may have a stale current flag; the highest issued revision is authoritative.
         $current = MedicalDocument::query()->where('public_code', $document->public_code)
-            ->whereIn('status', [MedicalDocumentStatus::ISSUED->value, MedicalDocumentStatus::REVOKED->value])
+            ->whereIn('status', [MedicalDocumentStatus::ISSUED->value, MedicalDocumentStatus::REVOKED->value, MedicalDocumentStatus::REVIEW_REQUIRED->value, MedicalDocumentStatus::READY->value])
             ->orderByDesc('revision_number')->first();
         if ($current && $current->id !== $document->id) {
             return redirect()->route('admin.documents.edit', $current);
@@ -234,7 +234,10 @@ class MedicalDocumentController extends Controller
                 }
             }
             logger()->info('correction.validation.pass', ['document_id' => $document->id]);
-            $copy = $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
+            // Resume the one pending correction, rather than accumulating failed correction copies.
+            $copy = $document->reissue_of_id && in_array($document->status, [MedicalDocumentStatus::REVIEW_REQUIRED, MedicalDocumentStatus::READY], true)
+                ? $document
+                : $revisions->create($document, $data['reason'], $request->user(), $document->revision_number);
             logger()->info('correction.revision.prepare', ['document_id' => $copy->id, 'revision' => $copy->revision_number]);
             [$firstName, $lastName] = $this->splitName($fields['patient_name']);
             $patient = $copy->patient;
