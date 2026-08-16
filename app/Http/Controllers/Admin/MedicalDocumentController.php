@@ -225,7 +225,7 @@ class MedicalDocumentController extends Controller
                 }
             }
             if (! empty($fields['leave_days']) && ! empty($fields['leave_start_date']) && ! empty($fields['leave_end_date'])) {
-                $days = \Carbon\CarbonImmutable::parse($fields['leave_start_date'])->diffInDays(\Carbon\CarbonImmutable::parse($fields['leave_end_date']), true) + 1;
+                $days = (int) \Carbon\CarbonImmutable::parse($fields['leave_start_date'])->diffInDays(\Carbon\CarbonImmutable::parse($fields['leave_end_date']), true) + 1;
                 if ($days !== (int) $fields['leave_days']) {
                     return $this->editFailure($request, 'Los días de incapacidad no coinciden con las fechas seleccionadas.', 422, 'INCAPACITY_RANGE_MISMATCH');
                 }
